@@ -3,19 +3,19 @@ from dataclasses import dataclass
 from functools import reduce
 
 import torch
-from rtrl.envs import AvenueEnv
+from agents.envs import AvenueEnv
 from torch.nn.functional import mse_loss
 
-import rtrl.sac
-from rtrl.memory import Memory
-from rtrl.nn import no_grad, exponential_moving_average, PopArt
-from rtrl.util import partial
-from rtrl.rtac_models import ConvRTAC, ConvDouble
+import agents.sac
+from agents.memory import Memory
+from agents.nn import no_grad, exponential_moving_average, PopArt
+from agents.util import partial
+from agents.rtac_models import ConvRTAC, ConvDouble
 
 
 @dataclass(eq=0)
-class Agent(rtrl.sac.Agent):
-  Model: type = rtrl.rtac_models.MlpDouble
+class Agent(agents.sac.Agent):
+  Model: type = agents.rtac_models.MlpDouble
   loss_alpha: float = 0.2
 
   def __post_init__(self, observation_space, action_space):
@@ -96,8 +96,8 @@ AvenueAgent = partial(
 
 
 if __name__ == "__main__":
-  from rtrl import Training, run
-  from rtrl import rtac_models
+  from agents import Training, run
+  from agents import rtac_models
   Rtac_Test = partial(
     Training,
     epochs=3,

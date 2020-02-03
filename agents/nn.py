@@ -8,7 +8,7 @@ from torch.nn import Module
 from torch.nn.init import kaiming_uniform_, xavier_uniform_, calculate_gain
 from torch.nn.parameter import Parameter
 
-from rtrl import partial
+from agents import partial
 
 
 def no_grad(model):

@@ -7,10 +7,10 @@ import numpy as np
 import torch
 from torch.nn.functional import mse_loss
 
-from rtrl.memory import Memory
-from rtrl.nn import PopArt, no_grad, copy_shared, exponential_moving_average, hd_conv
-from rtrl.util import cached_property, partial
-import rtrl.sac_models
+from agents.memory import Memory
+from agents.nn import PopArt, no_grad, copy_shared, exponential_moving_average, hd_conv
+from agents.util import cached_property, partial
+import agents.sac_models
 
 
 @dataclass(eq=0)
@@ -18,7 +18,7 @@ class Agent:
   observation_space: InitVar
   action_space: InitVar
 
-  Model: type = rtrl.sac_models.Mlp
+  Model: type = agents.sac_models.Mlp
   OutputNorm: type = PopArt
   batchsize: int = 256  # training batch size
   memory_size: int = 1000000  # replay memory size
@@ -123,13 +123,13 @@ AvenueAgent = partial(
   batchsize=100,
   training_interval=4,
   start_training=10000,
-  Model=partial(rtrl.sac_models.ConvModel)
+  Model=partial(agents.sac_models.ConvModel)
 )
 
 
 # === tests ============================================================================================================
 def test_agent():
-  from rtrl import Training, run
+  from agents import Training, run
   Sac_Test = partial(
     Training,
     epochs=3,
@@ -142,8 +142,8 @@ def test_agent():
 
 
 def test_agent_avenue():
-  from rtrl import Training, run
-  from rtrl.envs import AvenueEnv
+  from agents import Training, run
+  from agents.envs import AvenueEnv
   Sac_Avenue_Test = partial(
     Training,
     epochs=3,
@@ -157,8 +157,8 @@ def test_agent_avenue():
 
 
 def test_agent_avenue_hd():
-  from rtrl import Training, run
-  from rtrl.envs import AvenueEnv
+  from agents import Training, run
+  from agents.envs import AvenueEnv
   Sac_Avenue_Test = partial(
     Training,
     epochs=3,

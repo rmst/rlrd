@@ -1,5 +1,5 @@
 from random import randint
-from rtrl.util import collate
+from agents.util import collate
 
 
 class Memory:

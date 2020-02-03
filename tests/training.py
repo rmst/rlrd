@@ -4,8 +4,8 @@ import gym
 import numpy as np
 import torch
 
-from rtrl.sac_models import Mlp
-from rtrl import *
+from agents.sac_models import Mlp
+from agents import *
 
 
 class TestMlp(Mlp):

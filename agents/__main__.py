@@ -2,17 +2,17 @@
 
 Usage:
 
-  python -m rtrl run rtrl:RtacTraining Env.id=Pendulum-v0
+  python -m agents run agents:RtacTraining Env.id=Pendulum-v0
 
 or
 
-  python -m rtrl run-fs rtrl-checkpoint-0 rtrl:RtacTraining Env.id=Pendulum-v0
+  python -m agents run-fs agents-checkpoint-0 agents:RtacTraining Env.id=Pendulum-v0
 """
 
 import sys
 
-from rtrl import *
-from rtrl.util import partial_from_args
+from agents import *
+from agents.util import partial_from_args
 
 _, cmd, *args = sys.argv
 

@@ -4,9 +4,9 @@ import gym
 import torch
 from torch.nn.functional import leaky_relu
 
-from rtrl.util import collate, partition
+from agents.util import collate, partition
 from torch.nn import Linear, Sequential, ReLU, ModuleList, Module
-from rtrl.nn import TanhNormalLayer, SacLinear, big_conv
+from agents.nn import TanhNormalLayer, SacLinear, big_conv
 
 
 class ActorModule(Module):

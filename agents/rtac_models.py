@@ -2,12 +2,12 @@ from dataclasses import dataclass, InitVar
 
 import gym
 import torch
-from rtrl.util import collate, partition
-from rtrl.nn import TanhNormalLayer, SacLinear, big_conv
+from agents.util import collate, partition
+from agents.nn import TanhNormalLayer, SacLinear, big_conv
 from torch.nn import Module, Linear, Sequential, ReLU, Conv2d, LeakyReLU
 from torch.nn.functional import leaky_relu
 
-from rtrl.sac_models import ActorModule
+from agents.sac_models import ActorModule
 
 # TODO: Add separate mlp model
 

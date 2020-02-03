@@ -1,5 +1,5 @@
 """
-Test for scripts/rtrl-parallel
+Test for scripts/agents-parallel
 """
 
 import sys
@@ -8,7 +8,7 @@ from os.path import dirname
 from shutil import rmtree
 from subprocess import check_call
 from tempfile import mkdtemp
-from rtrl import save_json
+from agents import save_json
 
 ROOT = dirname(dirname(__file__))
 
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     environ["PATH"] = dirname(sys.executable) + ":" + environ["PATH"]
     # mkdir(path + "/e1")
     try:
-      callx(["rtrl-parallel", '1', 'python', '-m', 'rtrl', 'run-fs', path + '/e1', 'rtrl:RtacTraining', 'Env.id=Pendulum-v0'])
+      callx(["agents-parallel", '1', 'python', '-m', 'agents', 'run-fs', path + '/e1', 'agents:RtacTraining', 'Env.id=Pendulum-v0'])
     finally:
       callx(["ls", path])
       callx(["ls", path + "/e1"])

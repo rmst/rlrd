@@ -3,20 +3,20 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-import rtrl.sac
+import agents.sac
 from pandas import DataFrame, Timestamp
 
-from rtrl.testing import Test
-from rtrl.util import pandas_dict, cached_property
-from rtrl.wrappers import StatsWrapper
-from rtrl.envs import GymEnv
+from agents.testing import Test
+from agents.util import pandas_dict, cached_property
+from agents.wrappers import StatsWrapper
+from agents.envs import GymEnv
 
 
 @dataclass(eq=0)
 class Training:
   Env: type = GymEnv
   Test: type = Test
-  Agent: type = rtrl.sac.Agent
+  Agent: type = agents.sac.Agent
   epochs: int = 10
   rounds: int = 50  # number of rounds per epoch
   steps: int = 2000  # number of steps per round

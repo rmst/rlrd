@@ -12,11 +12,11 @@ from tempfile import mkdtemp
 import pandas as pd
 import yaml
 
-from rtrl.envs import AvenueEnv
-from rtrl.util import partial, save_json, partial_to_dict, partial_from_dict, load_json, dump, load, git_info
-from rtrl.training import Training
-import rtrl.rtac
-import rtrl.sac
+from agents.envs import AvenueEnv
+from agents.util import partial, save_json, partial_to_dict, partial_from_dict, load_json, dump, load, git_info
+from agents.training import Training
+import agents.rtac
+import agents.sac
 
 
 def iterate_episodes(run_cls: type = Training, checkpoint_path: str = None):
@@ -104,14 +104,14 @@ TestTraining = partial(
 
 SacTraining = partial(
   Training,
-  Agent=partial(rtrl.sac.Agent),
+  Agent=partial(agents.sac.Agent),
   Env=partial(id="Pendulum-v0"),
   Test=partial(number=4)
 )
 
 RtacTraining = partial(
   SacTraining,
-  Agent=partial(rtrl.rtac.Agent),
+  Agent=partial(agents.rtac.Agent),
   Env=partial(real_time=True),
 )
 
@@ -120,13 +120,13 @@ SacAvenueTraining = partial(
   epochs=20,
   rounds=10,
   steps=5000,
-  Agent=partial(rtrl.sac.AvenueAgent),
+  Agent=partial(agents.sac.AvenueAgent),
   Env=partial(AvenueEnv, real_time=False),
 )
 
 RtacAvenueTraining = partial(
   SacAvenueTraining,
-  Agent=partial(rtrl.rtac.AvenueAgent),
+  Agent=partial(agents.rtac.AvenueAgent),
   Env=partial(real_time=True),
 )
 
@@ -135,7 +135,7 @@ SacAvenueHdTraining = partial(
     epochs=20,
     rounds=10,
     steps=5000,
-    Agent=partial(rtrl.sac.AvenueAgent, training_interval=4, batchsize=32, memory_size=100000, Model=partial(Conv=rtrl.nn.hd_conv)),
+    Agent=partial(agents.sac.AvenueAgent, training_interval=4, batchsize=32, memory_size=100000, Model=partial(Conv=agents.nn.hd_conv)),
     Env=partial(AvenueEnv, real_time=0, width=368, height=368),
     Test=partial(number=0),  # laptop can't handle more than that
   )

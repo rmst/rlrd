@@ -2,7 +2,7 @@ import atexit
 import os
 from dataclasses import dataclass, InitVar
 import gym
-from rtrl.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, \
+from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, \
   TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper
 import numpy as np
 

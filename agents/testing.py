@@ -7,8 +7,8 @@ import torch
 import pandas as pd
 from pandas import DataFrame
 
-from rtrl.util import pandas_dict
-from rtrl.wrappers import StatsWrapper
+from agents.util import pandas_dict
+from agents.wrappers import StatsWrapper
 
 
 class Test:
