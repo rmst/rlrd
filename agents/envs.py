@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, InitVar
 import gym
 from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, \
-  TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper
+  TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip
 import numpy as np
 
 
@@ -41,8 +41,10 @@ class Env(gym.Wrapper):
 class GymEnv(Env):
   def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0):
     env = gym.make(id)
+    
     if frame_skip:
-      env.frame_skip = frame_skip
+      env.frame_skip = 1
+      env = FrameSkip(env, frame_skip)
 
     env = Float64ToFloat32(env)
     env = TimeLimitResetWrapper(env)

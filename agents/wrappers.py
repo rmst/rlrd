@@ -195,6 +195,22 @@ class Float64ToFloat32(gym.ObservationWrapper):
     return s, r, d, info
 
 
+class FrameSkip(gym.Wrapper):
+  def __init__(self, env, n):
+    assert n >= 1
+    super().__init__(env)
+    self.frame_skip = n
+
+  def step(self, action):
+    reward = 0
+    for i in range(self.frame_skip):
+      m, r, d, info = self.env.step(action)
+      reward += r
+      if d:
+        break
+    return m, reward, d, info
+
+
 # === Utilities ========================================================================================================
 
 def get_wrapper_by_class(env, cls):
