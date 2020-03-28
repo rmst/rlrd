@@ -39,8 +39,11 @@ class Env(gym.Wrapper):
 
 
 class GymEnv(Env):
-  def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False):
+  def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0):
     env = gym.make(id)
+    if frame_skip:
+      env.frame_skip = frame_skip
+
     env = Float64ToFloat32(env)
     env = TimeLimitResetWrapper(env)
     assert isinstance(env.action_space, gym.spaces.Box)
