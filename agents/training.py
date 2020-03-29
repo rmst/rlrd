@@ -22,6 +22,7 @@ class Training:
   steps: int = 2000  # number of steps per round
   stats_window: int = None  # default = steps, should be at least as long as a single episode
   seed: int = 0  # seed is currently not used
+  tag: str = ''  # to compare groups of runs that don't have simple distinguishing parameters
 
   def __post_init__(self):
     self.epoch = 0
