@@ -41,9 +41,13 @@ class Env(gym.Wrapper):
 class GymEnv(Env):
   def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0):
     env = gym.make(id)
-    
+
     if frame_skip:
+      original_frame_skip = getattr(env, 'frame_skip', 1)
+      # print("Original frame skip", original_frame_skip)
       env.frame_skip = 1
+      env._max_episode_steps = int(env._max_episode_steps * original_frame_skip / frame_skip)
+      # print("New max episode steps", env._max_episode_steps)
       env = FrameSkip(env, frame_skip)
 
     env = Float64ToFloat32(env)
