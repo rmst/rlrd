@@ -136,7 +136,7 @@ SacAvenueHdTraining = partial(
     epochs=20,
     rounds=10,
     steps=5000,
-    Agent=partial(agents.sac.AvenueAgent, training_interval=4, batchsize=32, memory_size=100000, Model=partial(Conv=agents.nn.hd_conv)),
+    Agent=partial(agents.sac.AvenueAgent, training_steps=1/4, batchsize=32, memory_size=100000, Model=partial(Conv=agents.nn.hd_conv)),
     Env=partial(AvenueEnv, real_time=0, width=368, height=368),
     Test=partial(number=0),  # laptop can't handle more than that
   )

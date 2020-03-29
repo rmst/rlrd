@@ -43,7 +43,7 @@ class GymEnv(Env):
     env = gym.make(id)
 
     if frame_skip:
-      original_frame_skip = getattr(env, 'frame_skip', 1)
+      original_frame_skip = getattr(env, 'frame_skip', 1)  # on many Mujoco environments this is 5
       # print("Original frame skip", original_frame_skip)
       if hasattr(env, 'dt'):
         env.dt = env.dt  # in case this is an attribute we fix it to its orignal value to not distort rewards (see halfcheetah.py)

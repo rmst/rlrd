@@ -29,12 +29,11 @@ class Agent:
   entropy_scale: float = 1.
   start_training: int = 10000
   device: str = None
-  training_interval: int = 1
+  training_steps: float = 1.  # training steps per environment interaction step
 
   model_nograd = cached_property(lambda self: no_grad(copy_shared(self.model)))
 
-  num_updates = 0
-  training_steps = 0
+  total_updates = 0  # will be (len(self.memory)-start_training) * training_steps / training_interval
 
   def __post_init__(self, observation_space, action_space):
     device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -55,9 +54,9 @@ class Agent:
 
     if train:
       self.memory.append(np.float32(r), np.float32(done), info, obs, action)
-      if len(self.memory) >= self.start_training and self.training_steps % self.training_interval == 0:
+      total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
+      for self.total_updates in range(self.total_updates, int(total_updates_target) + 1):
         stats += self.train(),
-      self.training_steps += 1
     return action, stats
 
   def train(self):
@@ -121,7 +120,7 @@ AvenueAgent = partial(
   lr=0.0002,
   memory_size=500000,
   batchsize=100,
-  training_interval=4,
+  training_steps=1/4,
   start_training=10000,
   Model=partial(agents.sac_models.ConvModel)
 )

@@ -89,7 +89,7 @@ AvenueAgent = partial(
   lr=0.0002,
   memory_size=500000,
   batchsize=100,
-  training_interval=4,
+  training_steps=1/4,
   start_training=10000,
   Model=partial(ConvDouble)
 )
