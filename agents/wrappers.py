@@ -196,10 +196,11 @@ class Float64ToFloat32(gym.ObservationWrapper):
 
 
 class FrameSkip(gym.Wrapper):
-  def __init__(self, env, n):
+  def __init__(self, env, n, rs=1):
     assert n >= 1
     super().__init__(env)
     self.frame_skip = n
+    self.reward_scale = rs
 
   def step(self, action):
     reward = 0
@@ -208,7 +209,7 @@ class FrameSkip(gym.Wrapper):
       reward += r
       if d:
         break
-    return m, reward, d, info
+    return m, reward * self.reward_scale, d, info
 
 
 # === Utilities ========================================================================================================
