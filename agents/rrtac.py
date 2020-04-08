@@ -5,9 +5,10 @@ from functools import reduce
 import torch
 from agents.envs import AvenueEnv
 from torch.nn.functional import mse_loss
+import numpy as np
 
 import agents.sac
-from agents.memory import Memory
+from agents.memory import Memory, TrajMemory
 from agents.nn import no_grad, exponential_moving_average, PopArt
 from agents.util import partial
 from agents.rtac_models import ConvRTAC, ConvDouble
@@ -17,6 +18,7 @@ from agents.rtac_models import ConvRTAC, ConvDouble
 class Agent(agents.sac.Agent):
   Model: type = agents.rtac_models.MlpDouble
   loss_alpha: float = 0.2
+  history_length: int = 16
 
   def __post_init__(self, observation_space, action_space):
     device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,40 +30,54 @@ class Agent(agents.sac.Agent):
     self.outputnorm_target = self.OutputNorm(self.model_target.critic_output_layers)
 
     self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-    self.memory = Memory(self.memory_size, self.batchsize, device)
+    self.memory = TrajMemory(self.memory_size, self.batchsize, device, self.history_length)
 
     self.is_training = False
 
+  def act(self, h, obs, r, done, info, train=False):
+    stats = []
+    action, h_next, _ = self.model.act(h, obs, r, done, info, train)
+
+    if train:
+      self.memory.append(np.float32(r), np.float32(done), info, obs, h_next, action)
+      total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
+      for self.total_updates in range(self.total_updates, int(total_updates_target) + 1):
+        stats += self.train(),
+    return action, h_next, stats
+
   def train(self):
-    obs, actions, rewards, next_obs, terminals = self.memory.sample()
-    rewards, terminals = rewards[:, None], terminals[:, None]  # expand for correct broadcasting below
+    m, h, a, r, terminals = self.memory.sample()
+    terminals = terminals[:, None]  # expand for correct broadcasting below
 
-    new_action_distribution, _, hidden = self.model(obs)
-    new_actions = new_action_distribution.rsample()
-    new_actions_log_prob = new_action_distribution.log_prob(new_actions)[:, None]
+    h = h[0]  # we recompute all the following memory states
+    loss_actor = 0
+    loss_critic = 0
 
+    for i in range(self.history_length):
+      new_action_distribution, h, _, critic_logits = self.model(h, m[i])
+      new_actions = new_action_distribution.rsample()
+      new_actions_log_prob = new_action_distribution.log_prob(new_actions)[:, None]
 
-    # critic loss
-    _, next_value_target, _ = self.model_target((next_obs[0], new_actions.detach()))
-    next_value_target = reduce(torch.min, next_value_target)
+      # critic loss
+      _, _, next_value_target, _ = self.model_target((m[i+1], new_actions.detach()))
+      next_value_target = reduce(torch.min, next_value_target)
 
-    value_target = (1. - terminals) * self.discount * self.outputnorm_target.unnormalize(next_value_target)
-    value_target += self.reward_scale * rewards
-    value_target -= self.entropy_scale * new_actions_log_prob.detach()
-    value_target = self.outputnorm.update(value_target)
+      value_target = self.discount * self.outputnorm_target.unnormalize(next_value_target)
+      value_target += self.reward_scale * r[i]
+      value_target -= self.entropy_scale * new_actions_log_prob.detach()
+      value_target = self.outputnorm.update(value_target)
+      values = tuple(c(h) for c, h in zip(self.model.critic_output_layers, critic_logits))  # recompute values (weights changed)
 
-    values = tuple(c(h) for c, h in zip(self.model.critic_output_layers, hidden))  # recompute values (weights changed)
+      assert values[0].shape == value_target.shape and not value_target.requires_grad
+      loss_critic += sum(mse_loss(v, value_target) for v in values)
 
-    assert values[0].shape == value_target.shape and not value_target.requires_grad
-    loss_critic = sum(mse_loss(v, value_target) for v in values)
-
-    # actor loss
-    _, next_value, _ = self.model_nograd((next_obs[0], new_actions))
-    next_value = reduce(torch.min, next_value)
-    loss_actor = - (1. - terminals) * self.discount * self.outputnorm.unnormalize(next_value)
-    loss_actor += self.entropy_scale * new_actions_log_prob
-    assert loss_actor.shape == (self.batchsize, 1)
-    loss_actor = self.outputnorm.normalize(loss_actor).mean()
+      # actor loss
+      _, next_value, _ = self.model_nograd((h, m[i+1], new_actions))
+      next_value = reduce(torch.min, next_value)
+      loss_actor_i = - (1. - terminals) * self.discount * self.outputnorm.unnormalize(next_value)
+      loss_actor_i += self.entropy_scale * new_actions_log_prob
+      assert loss_actor_i.shape == (self.batchsize, 1)
+      loss_actor += self.outputnorm.normalize(loss_actor_i).mean()
 
     # update model
     self.optimizer.zero_grad()

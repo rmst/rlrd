@@ -15,12 +15,12 @@ This repo is accompanying our paper "Real-Time Reinforcement Learning" (https://
 ### Getting Started
 This repo can be pip-installed via
 ```bash
-pip install git+https://github.com/rmst/rtrl.git
+pip install git+https://github.com/rmst/agents.git
 ```
 
 To train an RTAC agent on the basic `Pendulum-v0` task run
 ```bash
-python -m rtrl run rtrl:RtacTraining Env.id=Pendulum-v0
+python -m agents run agents:RtacTraining Env.id=Pendulum-v0
 ```
 
 
@@ -33,12 +33,12 @@ To install Mujoco you follow the instructions at [openai/gym](https://github.com
 
 To train an RTAC agent on `HalfCheetah-v2` run
 ```bash
-python -m rtrl run rtrl:RtacTraining Env.id=HalfCheetah-v2
+python -m agents run agents:RtacTraining Env.id=HalfCheetah-v2
 ```
 
 To train a SAC agent on `Ant-v2` with a real-time wrapper (i.e. RTMDP in the paper) run
 ```bash
-python -m rtrl run rtrl:SacTraining Env.id=Ant-v2 Env.real_time=True
+python -m agents run agents:SacTraining Env.id=Ant-v2 Env.real_time=True
 ```
 
 ### Avenue Experiments
@@ -50,7 +50,7 @@ pip install git+https://github.com/elementai/avenue.git
 
 To train an RTAC agent to drive on a race track (left image) run
 ```bash
-python -m rtrl run rtrl:RtacAvenueTraining Env.id=RaceSolo-v0
+python -m agents run agents:RtacAvenueTraining Env.id=RaceSolo-v0
 ```
 Note that this requires a lot of resources, especially memory (16GB+).
 
@@ -58,7 +58,7 @@ Note that this requires a lot of resources, especially memory (16GB+).
 ### Storing Stats
 `python -m rtrl run` just prints stats to stdout. To save stats use the following instead.
 ```bash
-python -m rtrl run-fs experiment-1 rtrl:RtacTraining Env.id=Pendulum-v0
+python -m agents run-fs experiment-1 agents:RtacTraining Env.id=Pendulum-v0
 ```
 Stats are generated and printed every `round` but only saved to disk every `epoch`. The stats will be saved as pickled pandas dataframes in `experiment-1/stats`.
 
@@ -71,3 +71,4 @@ import rtrl
 run = rtrl.load('experiment-1/state')
 print(run.agent.memory[0])
 ``` 
+
