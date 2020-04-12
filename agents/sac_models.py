@@ -2,6 +2,7 @@ from dataclasses import InitVar, dataclass
 
 import gym
 import torch
+import numpy as np
 from torch.nn.functional import leaky_relu
 
 from agents.util import collate, partition
@@ -15,16 +16,34 @@ class ActorModule(Module):
 
   # noinspection PyMethodOverriding
   def to(self, device):
+    """keeps track which device this module has been moved to"""
     self.device = device
     return super().to(device=device)
 
-  def act(self, obs, r, done, info, train=False):
-    obs_col = collate((obs,), device=self.device)
+  def reset(self):
+    """initializes the hidden state"""
+    return np.array(())
+
+  def act(self, state, obs, r, done, info, train=False):
+    """allows this module to be used with gym.Env
+    converts inputs to torch tensors and converts outputs to numpy arrays"""
+    obs = collate([obs], device=self.device)
     with torch.no_grad():
-      action_distribution = self.actor(obs_col)
-      action_col = action_distribution.sample() if train else action_distribution.sample_deterministic()
-    action, = partition(action_col)
-    return action, []
+      action_distribution = self.actor(obs)
+      action = action_distribution.sample() if train else action_distribution.sample_deterministic()
+    action, = partition(action)
+    return action, state, []
+
+
+class StatefulActorModule(ActorModule):
+  def act(self, state, obs, r, done, info, train=False):
+    """actually uses the state and updates it within the actor"""
+    state, obs = collate([(state, obs)], device=self.device)
+    with torch.no_grad():
+      action_distribution, next_state = self.actor(state, obs)
+      action = action_distribution.sample() if train else action_distribution.sample_deterministic()
+    (action, next_state), = partition((action, next_state))
+    return action, next_state, []
 
 
 class MlpActionValue(Sequential):
@@ -32,7 +51,7 @@ class MlpActionValue(Sequential):
     super().__init__(
       SacLinear(dim_obs + dim_action, hidden_units), ReLU(),
       SacLinear(hidden_units, hidden_units), ReLU(),
-      Linear(hidden_units, 1)
+      Linear(hidden_units, 2)
     )
 
   # noinspection PyMethodOverriding
@@ -49,6 +68,7 @@ class MlpPolicy(Sequential):
       TanhNormalLayer(hidden_units, dim_action)
     )
 
+  # noinspection PyMethodOverriding
   def forward(self, obs):
     return super().forward(torch.cat(obs, 1))
 
@@ -113,7 +133,7 @@ class ConvCritic(Module):
       hidden_units + vec_sp.shape[0] + sum(sp.shape[0] for sp in aux) + action_space.shape[0],
       hidden_units
     )
-    self.output_layer = torch.nn.Linear(hidden_units, 1)
+    self.output_layer = torch.nn.Linear(hidden_units, 2)
     self.critic_output_layers = self.output_layer,
 
   def forward(self, observation, a):
@@ -138,5 +158,7 @@ class ConvModel(ActorModule):
 
 # === Testing ==========================================================================================================
 class TestMlp(ActorModule):
-  def act(self, obs, r, done, info, train=False):
-    return obs.copy(), {}
+  def act(self, state, obs, r, done, info, train=False):
+    return obs.copy(), state, {}
+
+

@@ -11,6 +11,14 @@ from torch.nn.parameter import Parameter
 from agents import partial
 
 
+
+def detach(x):
+  if isinstance(x, torch.Tensor):
+    return x.detach()
+  else:
+    return [detach(elem) for elem in x]
+
+
 def no_grad(model):
   for p in model.parameters():
     p.requires_grad = False
@@ -37,7 +45,7 @@ def copy_shared(model_a):
 
 class PopArt(Module):
   """PopArt http://papers.nips.cc/paper/6076-learning-values-across-many-orders-of-magnitude"""
-  def __init__(self, output_layer, beta: float = 0.0003, zero_debias: bool = True, start_pop: int = 8):
+  def __init__(self, output_layer, beta: float = 0.0003, zero_debias: bool = True, start_pop: int = 0):
     # zero_debias=True and start_pop=8 seem to improve things a little but (False, 0) works as well
     super().__init__()
     self.start_pop = start_pop
@@ -61,14 +69,11 @@ class PopArt(Module):
     new_mean_square = (1 - beta) * self.mean_square + beta * (targets * targets).mean(0)
     new_std = (new_mean_square - new_mean * new_mean).sqrt().clamp(0.0001, 1e6)
 
-    assert self.std.shape == (1,), 'this has only been tested in 1D'
+    # assert self.std.shape == (1,), 'this has only been tested in 1D'
 
     if self.updates >= self.start_pop:
       for layer in self.output_layers:
-        # TODO: Properly apply PopArt in RTAC and remove the hack below
-        # We modify the weight while it's gradient is being computed
-        # Therefore we have to use .data (Pytorch would otherwise throw an error)
-        layer.weight *= self.std / new_std
+        layer.weight *= (self.std / new_std)[:, None]
         layer.bias *= self.std
         layer.bias += self.mean - new_mean
         layer.bias /= new_std
@@ -99,9 +104,12 @@ class TanhNormal(Distribution):
     super().__init__(self.normal.batch_shape, self.normal.event_shape)
 
   def log_prob(self, x):
-    assert hasattr(x, "pre_tanh_value")
-    assert x.dim() == 2 and x.pre_tanh_value.dim() == 2
-    return self.normal.log_prob(x.pre_tanh_value) - torch.log(
+    if hasattr(x, "pre_tanh_value"):
+      pre_tanh_value = x.pre_tanh_value
+    else:
+      pre_tanh_value = (torch.log(1 + x + self.epsilon) - torch.log(1 - x + self.epsilon)) / 2
+    assert x.dim() == 2 and pre_tanh_value.dim() == 2
+    return self.normal.log_prob(pre_tanh_value) - torch.log(
       1 - x * x + self.epsilon
     )
 

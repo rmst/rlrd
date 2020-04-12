@@ -9,16 +9,16 @@ import numpy as np
 
 import agents.sac
 from agents.memory import Memory, TrajMemory
-from agents.nn import no_grad, exponential_moving_average, PopArt
+from agents.nn import no_grad, exponential_moving_average, PopArt, detach
 from agents.util import partial
-from agents.rtac_models import ConvRTAC, ConvDouble
+from agents.rrtac_models import LstmModel, LstmDouble
 
 
 @dataclass(eq=0)
 class Agent(agents.sac.Agent):
-  Model: type = agents.rtac_models.MlpDouble
-  loss_alpha: float = 0.2
-  history_length: int = 16
+  Model: type = LstmModel
+  loss_alpha: float = 0.05
+  history_length: int = 1
 
   def __post_init__(self, observation_space, action_space):
     device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,45 +34,48 @@ class Agent(agents.sac.Agent):
 
     self.is_training = False
 
-  def act(self, h, obs, r, done, info, train=False):
+  def act(self, state, obs, r, done, info, train=False):
     stats = []
-    action, h_next, _ = self.model.act(h, obs, r, done, info, train)
+    action, next_state, _ = self.model.act(state, obs, r, done, info, train)
 
     if train:
-      self.memory.append(np.float32(r), np.float32(done), info, obs, h_next, action)
+      self.memory.append(np.float32(r), np.float32(done), info, obs, next_state, action)
       total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
       for self.total_updates in range(self.total_updates, int(total_updates_target) + 1):
         stats += self.train(),
-    return action, h_next, stats
+    return action, next_state, stats
 
   def train(self):
-    m, h, a, r, terminals = self.memory.sample()
+    obs, ms, a, r, terminals = self.memory.sample()
     terminals = terminals[:, None]  # expand for correct broadcasting below
 
-    h = h[0]  # we recompute all the following memory states
+    # torch.autograd.set_detect_anomaly(True)
+
+    ms_i = ms[0]  # we recompute all the following memory states
     loss_actor = 0
     loss_critic = 0
-
+    value_targets = []
     for i in range(self.history_length):
-      new_action_distribution, h, _, critic_logits = self.model(h, m[i])
+      new_action_distribution, ms_i, _, critic_logits = self.model(ms_i, obs[i])
       new_actions = new_action_distribution.rsample()
       new_actions_log_prob = new_action_distribution.log_prob(new_actions)[:, None]
 
       # critic loss
-      _, _, next_value_target, _ = self.model_target((m[i+1], new_actions.detach()))
+      _, _, next_value_target, _ = self.model_target(detach(ms_i), (obs[i+1][0], new_actions.detach()))
       next_value_target = reduce(torch.min, next_value_target)
 
       value_target = self.discount * self.outputnorm_target.unnormalize(next_value_target)
-      value_target += self.reward_scale * r[i]
+      value_target += self.reward_scale * r[i][:, None]
       value_target -= self.entropy_scale * new_actions_log_prob.detach()
-      value_target = self.outputnorm.update(value_target)
+      value_targets += value_target,
+      value_target = self.outputnorm.normalize(value_target)
       values = tuple(c(h) for c, h in zip(self.model.critic_output_layers, critic_logits))  # recompute values (weights changed)
 
       assert values[0].shape == value_target.shape and not value_target.requires_grad
       loss_critic += sum(mse_loss(v, value_target) for v in values)
 
       # actor loss
-      _, next_value, _ = self.model_nograd((h, m[i+1], new_actions))
+      _, _, next_value, _ = self.model_nograd(ms_i, (obs[i+1][0], new_actions))
       next_value = reduce(torch.min, next_value)
       loss_actor_i = - (1. - terminals) * self.discount * self.outputnorm.unnormalize(next_value)
       loss_actor_i += self.entropy_scale * new_actions_log_prob
@@ -86,6 +89,7 @@ class Agent(agents.sac.Agent):
     self.optimizer.step()
 
     # update target model and normalizers
+    self.outputnorm.update(torch.cat(value_targets))
     exponential_moving_average(self.model_target.parameters(), self.model.parameters(), self.target_update)
     exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)
 
@@ -100,40 +104,40 @@ class Agent(agents.sac.Agent):
     )
 
 
-AvenueAgent = partial(
-  Agent,
-  entropy_scale=0.05,
-  lr=0.0002,
-  memory_size=500000,
-  batchsize=100,
-  training_interval=4,
-  start_training=10000,
-  Model=partial(ConvDouble)
-)
+# AvenueAgent = partial(
+#   Agent,
+#   entropy_scale=0.05,
+#   lr=0.0002,
+#   memory_size=500000,
+#   batchsize=100,
+#   training_interval=4,
+#   start_training=10000,
+#   Model=partial(ConvDouble)
+# )
 
 
 if __name__ == "__main__":
   from agents import Training, run
-  from agents import rtac_models
-  Rtac_Test = partial(
+  RrtacTest = partial(
     Training,
-    epochs=3,
-    rounds=5,
-    steps=500,
-    Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4),
-    # Env=partial(id="Pendulum-v0", real_time=True),
-    Env=partial(id="HalfCheetah-v2", real_time=True),
+    epochs=5,
+    rounds=10,
+    steps=200,
+    Agent=partial(Agent, Model=partial(LstmDouble, hidden_units=32), device='cuda', memory_size=1000000, start_training=200, batchsize=8),
+    # Agent=partial(Agent, Model=partial(LstmModel, hidden_units=32), device='cuda', memory_size=1000000, start_training=200, batchsize=8),
+    Env=partial(id="Pendulum-v0", real_time=True),
+    # Env=partial(id="HalfCheetah-v2", real_time=True),
   )
 
-  Rtac_Avenue_Test = partial(
-    Training,
-    epochs=3,
-    rounds=5,
-    steps=300,
-    Agent=partial(AvenueAgent, device='cpu', start_training=256, batchsize=4, Model=rtac_models.ConvSeparate),
-    Env=partial(AvenueEnv, real_time=True),
-    Test=partial(number=0),  # laptop can't handle more than that
-  )
+  # Rtac_Avenue_Test = partial(
+  #   Training,
+  #   epochs=3,
+  #   rounds=5,
+  #   steps=300,
+  #   Agent=partial(AvenueAgent, device='cpu', start_training=256, batchsize=4, Model=rtac_models.ConvSeparate),
+  #   Env=partial(AvenueEnv, real_time=True),
+  #   Test=partial(number=0),  # laptop can't handle more than that
+  # )
 
-  run(Rtac_Test)
+  run(RrtacTest)
   # run(Rtac_Avenue_Test)

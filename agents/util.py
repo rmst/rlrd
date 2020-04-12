@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from dataclasses import is_dataclass, dataclass, make_dataclass, fields, Field
 from importlib import import_module
 from itertools import chain
-from typing import TypeVar, Union, Type, Callable, Any, Dict, Sequence, Mapping
+from typing import TypeVar, Union, Type, Callable, Any, Dict, Sequence, Mapping, Tuple
 from weakref import WeakKeyDictionary
 
 import numpy as np
@@ -34,6 +34,7 @@ def shallow_copy(obj: T) -> T:
 # === collate and partition ============================================================================================
 
 def collate(batch, device=None):
+  """Turns a batch of nested structures with numpy arrays as leaves into into a single element of the same nested structure with batched torch tensors as leaves"""
   elem = batch[0]
   if isinstance(elem, torch.Tensor):
     # return torch.stack(batch, 0).to(device, non_blocking=non_blocking)
@@ -55,6 +56,7 @@ def collate(batch, device=None):
 
 
 def partition(x):
+  """Turns a nested structure with batched torch tensors as leaves into a batch of elements with the same nested structure and un-batched numpy arrays as leaves"""
   if isinstance(x, torch.Tensor):
     # return x.cpu()
     return x.cpu().numpy()  # perhaps we should convert this to tuple for consistency?
@@ -63,6 +65,8 @@ def partition(x):
     numel = len(tuple(m.values())[0])
     out = tuple(type(x)((key, value[i]) for key, value in m.items()) for i in range(numel))
     return out
+  elif isinstance(x, Tuple):
+    return tuple(zip(*[partition(elem) for elem in x]))
   raise TypeError()
 
 

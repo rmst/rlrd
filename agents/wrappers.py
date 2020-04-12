@@ -1,7 +1,9 @@
 from collections import Sequence, Mapping, deque
+from random import randint
 
 import gym
 import numpy as np
+from gym.wrappers import TimeLimit
 
 
 class RealTimeWrapper(gym.Wrapper):
@@ -205,6 +207,25 @@ class FrameSkip(gym.Wrapper):
   def step(self, action):
     reward = 0
     for i in range(self.frame_skip):
+      m, r, d, info = self.env.step(action)
+      reward += r
+      if d:
+        break
+    return m, reward * self.reward_scale, d, info
+
+
+class RandomObservationDelay(gym.Wrapper):
+  def __init__(self, env, maxskip=10):
+    super().__init__(env)
+    self.maxskip = maxskip
+    self.past_actions = deque(maxlen=maxskip)
+
+  def reset(self, **kwargs):
+    pass
+  def step(self, action):
+    skip = randint(1, self.maxskip)
+    reward = 0
+    for i in range(skip):
       m, r, d, info = self.env.step(action)
       reward += r
       if d:

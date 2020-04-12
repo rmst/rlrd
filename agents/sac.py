@@ -25,8 +25,8 @@ class Agent:
   lr: float = 0.0003  # learning rate
   discount: float = 0.99  # reward discount factor
   target_update: float = 0.005  # parameter for exponential moving average
-  reward_scale: float = 5.
-  entropy_scale: float = 1.
+  reward_scale: float = 500.  # multiplied by 100 compared to the since we use expected instead of cumulative reward
+  entropy_scale: float = 100.  # multiplied by 100 compared to the since we use expected instead of cumulative reward
   start_training: int = 10000
   device: str = None
   training_steps: float = 1.  # training steps per environment interaction step
@@ -48,47 +48,54 @@ class Agent:
     self.outputnorm = self.OutputNorm(self.model.critic_output_layers)
     self.outputnorm_target = self.OutputNorm(self.model_target.critic_output_layers)
 
-  def act(self, obs, r, done, info, train=False):
+  def act(self, state, obs, r, done, info, train=False):
     stats = []
-    action, _ = self.model.act(obs, r, done, info, train)
+    state = self.model.reset() if state is None else state  # initialize state if necessary
+    action, next_state, _ = self.model.act(state, obs, r, done, info, train)
 
     if train:
       self.memory.append(np.float32(r), np.float32(done), info, obs, action)
       total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
-      for self.total_updates in range(self.total_updates, int(total_updates_target) + 1):
+      for self.total_updates in range(self.total_updates+1, int(total_updates_target)+1):
+        if self.total_updates == 1:
+          print("starting training")
         stats += self.train(),
-    return action, stats
+    return action, next_state, stats
 
   def train(self):
-    obs, actions, rewards, next_obs, terminals = self.memory.sample()
-    rewards, terminals = rewards[:, None], terminals[:, None]  # expand for correct broadcasting below
-
-    new_action_distribution = self.model.actor(obs)
-    new_actions = new_action_distribution.rsample()
+    obs, actions, rewards, next_obs, terminals = self.memory.sample()  # sample a transition from the replay buffer
+    new_action_distribution = self.model.actor(obs)  # outputs distribution object
+    new_actions = new_action_distribution.rsample()  # samples using the reparametrization trick
 
     # critic loss
-    next_action_distribution = self.model_nograd.actor(next_obs)
-    next_actions = next_action_distribution.sample()
+    next_action_distribution = self.model_nograd.actor(next_obs)  # outputs distribution object
+    next_actions = next_action_distribution.sample()  # samples
     next_value = [c(next_obs, next_actions) for c in self.model_target.critics]
-    next_value = reduce(torch.min, next_value)
-    next_value = self.outputnorm_target.unnormalize(next_value)
-    next_value = next_value - self.entropy_scale * next_action_distribution.log_prob(next_actions)[:, None]
+    next_value = reduce(torch.min, next_value)  # minimum action-value
+    next_value = self.outputnorm_target.unnormalize(next_value)  # PopArt (not present in the original paper)
 
-    value_target = self.reward_scale * rewards + (1. - terminals) * self.discount * next_value
-    value_target = self.outputnorm.update(value_target)
+    # predict entropy rewards in a separate dimension from the normal rewards (not present in the original paper)
+    next_action_entropy = - (1. - terminals) * self.discount * next_action_distribution.log_prob(next_actions)
+    reward_components = torch.cat((
+      self.reward_scale * rewards[:, None],
+      self.entropy_scale * next_action_entropy[:, None],
+    ), dim=1)  # shape = (batchsize, reward_components)
+
+    # Instead of estimating the discounted cumulative future reward we're estimating the discounted reward. The expected discounted returns are proportional to cumulative returns but their scale is independent of the discount factor. This is not present in the original paper.
+    value_target = (1-self.discount) * reward_components + (1. - terminals[:, None]) * self.discount * next_value
+    normalized_value_target = self.outputnorm.update(value_target)  # PopArt update and normalize
 
     values = [c(obs, actions) for c in self.model.critics]
-    assert values[0].shape == value_target.shape and not value_target.requires_grad
-    loss_critic = sum(mse_loss(v, value_target) for v in values)
+    assert values[0].shape == normalized_value_target.shape and not normalized_value_target.requires_grad
+    loss_critic = sum(mse_loss(v, normalized_value_target) for v in values)
 
     # actor loss
-    new_value = [c(obs, new_actions) for c in self.model.critics]
-    new_value = reduce(torch.min, new_value)
-    new_value = self.outputnorm.unnormalize(new_value)
-
-    loss_actor = self.entropy_scale * new_action_distribution.log_prob(new_actions)[:, None] - new_value
-    assert loss_actor.shape == (self.batchsize, 1)
-    loss_actor = self.outputnorm.normalize(loss_actor).mean()
+    new_value = [c(obs, new_actions) for c in self.model.critics]  # new_actions with reparametrization trick
+    new_value = reduce(torch.min, new_value)  # minimum action_values
+    assert new_value.shape == (self.batchsize, 2)
+    new_action_entropy = (1-self.discount) * self.entropy_scale * new_action_distribution.log_prob(new_actions)
+    new_action_entropy = self.outputnorm.normalize(new_action_entropy[:, None])[:, -1]  # use only the entropy component
+    loss_actor = new_action_entropy.mean() - new_value.mean()
 
     # update actor and critic
     self.critic_optimizer.zero_grad()
@@ -99,8 +106,6 @@ class Agent:
     loss_actor.backward()
     self.actor_optimizer.step()
 
-    # self.outputnorm.normalize(value_target, update=True)  # This is not the right place to update PopArt
-
     # update target critics and normalizers
     exponential_moving_average(self.model_target.critics.parameters(), self.model.critics.parameters(), self.target_update)
     exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)
@@ -108,8 +113,8 @@ class Agent:
     return dict(
       loss_actor=loss_actor.detach(),
       loss_critic=loss_critic.detach(),
-      outputnorm_mean=float(self.outputnorm.mean),
-      outputnorm_std=float(self.outputnorm.std),
+      outputnorm_mean=float(self.outputnorm.mean.mean()),
+      outputnorm_std=float(self.outputnorm.std.mean()),
       memory_size=len(self.memory),
     )
 

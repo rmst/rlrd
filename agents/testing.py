@@ -35,9 +35,10 @@ class Test:
 def run_test(number, *, Env, actor, base_seed, steps):
   t0 = pd.Timestamp.utcnow()
   env = Env(seed_val=base_seed + number)
+  state = None
   with StatsWrapper(env, window=steps) as env:
     for step in range(steps):
-      action, stats = actor.act(*env.transition)
+      action, state, stats = actor.act(state, *env.transition)
       # action = env.action_space.sample()
       env.step(action)
 
