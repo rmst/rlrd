@@ -214,23 +214,66 @@ class FrameSkip(gym.Wrapper):
     return m, reward * self.reward_scale, d, info
 
 
-class RandomObservationDelay(gym.Wrapper):
-  def __init__(self, env, maxskip=10):
+class RandomDelayWrapper(gym.Wrapper):
+  def __init__(self, env, max_delay=10):
     super().__init__(env)
-    self.maxskip = maxskip
-    self.past_actions = deque(maxlen=maxskip)
+    self.max_delay = max_delay  # TODO: allow for different max obs and action delays
+    self.past_actions = deque(maxlen=max_delay)
+    self.past_observations = deque(maxlen=max_delay)
+    self.t = 0
+    self.arrival_times_actions = deque(maxlen=max_delay)
+    self.arrival_times_observations = deque(maxlen=max_delay)
+    self.done_signal_sent = False
+
+    # TODO: observation and action space
 
   def reset(self, **kwargs):
-    pass
+    self.t = 0
+    self.done_signal_sent = False
+    first_observation = super().reset(**kwargs)
+
+    # fill up buffers
+    [self.send_action(self.action_space.sample()) for _ in range(self.max_delay)]
+    [self.send_observation((first_observation, 0., False, {})) for _ in range(self.max_delay)]
+
+    received_observation, *_ = self.receive_observation()
+    return received_observation
+
   def step(self, action):
-    skip = randint(1, self.maxskip)
-    reward = 0
-    for i in range(skip):
-      m, r, d, info = self.env.step(action)
-      reward += r
-      if d:
-        break
-    return m, reward * self.reward_scale, d, info
+    # at the brain
+    self.send_action(action)
+
+    # at the remote actor
+    if self.done_signal_sent:
+      # just resend the last observation until the brain gets it
+      self.send_observation(self.past_observations[0])
+    else:
+      most_recent_received_action_index = next(i for i, t in enumerate(self.arrival_times_actions) if t <= self.t)
+      action_to_apply = self.past_actions[most_recent_received_action_index]
+      m, r, d, info = self.env.step(action_to_apply)
+      self.send_observation((m, r, d, info, most_recent_received_action_index))
+
+    # at the brain again
+    m, r, d, info = self.receive_observation()
+
+    self.t += 1
+    return m, r, d, info
+
+  def send_action(self, action):
+    # at the brain
+    self.arrival_times_actions.appendleft(self.t + randint(1, self.max_delay))  # TODO: could be any distribution
+    self.past_actions.appendleft(action)
+
+  def send_observation(self, obs):
+    # at the remote actor
+    self.past_observations.appendleft(obs)
+    self.arrival_times_observations.appendleft(self.t + randint(1, self.max_delay))  # TODO: could be any distribution
+
+  def receive_observation(self):
+    # at the brain
+    most_recent_received_observation_index = next(i for i, t in enumerate(self.arrival_times_observations) if t <= self.t)
+    m, r, d, info, action_index = self.past_observations[most_recent_received_observation_index]
+    return (m, action_index, tuple(self.past_actions)), r, d, info
 
 
 # === Utilities ========================================================================================================

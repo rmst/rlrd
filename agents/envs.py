@@ -24,7 +24,7 @@ def mujoco_py_issue_424_workaround():
 
 
 class Env(gym.Wrapper):
-  """Environment class that slightly chances the semantics of the gym.Env"""
+  """Environment class wrapping gym.Env that automatically resets and stores the last transition"""
   def __init__(self, env):
     super().__init__(env)
     self.transition = (self.reset(), 0., True, {})

@@ -75,7 +75,8 @@ def partition(x):
 # noinspection PyPep8Naming
 class cached_property:
   """Similar to `property` but after calling the getter/init function the result is cached.
-  It can be used to create object attributes that aren't stored in the object's __dict__. """
+  It can be used to create object attributes that aren't stored in the object's __dict__.
+  This is useful if we want to exclude certain attributes from being pickled."""
 
   def __init__(self, init=None):
     self.cache = {}
