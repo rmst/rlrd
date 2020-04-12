@@ -75,7 +75,8 @@ class Agent:
     next_value = self.outputnorm_target.unnormalize(next_value)  # PopArt (not present in the original paper)
 
     # predict entropy rewards in a separate dimension from the normal rewards (not present in the original paper)
-    next_action_entropy = - (1. - terminals) * self.discount * next_action_distribution.log_prob(next_actions)
+    # next_action_entropy = - (1. - terminals) * self.discount * next_action_distribution.log_prob(next_actions)
+    next_action_entropy = - new_action_distribution.log_prob(actions)  # not present in the original paper
     reward_components = torch.cat((
       self.reward_scale * rewards[:, None],
       self.entropy_scale * next_action_entropy[:, None],
@@ -93,9 +94,11 @@ class Agent:
     new_value = [c(obs, new_actions) for c in self.model.critics]  # new_actions with reparametrization trick
     new_value = reduce(torch.min, new_value)  # minimum action_values
     assert new_value.shape == (self.batchsize, 2)
-    new_action_entropy = (1-self.discount) * self.entropy_scale * new_action_distribution.log_prob(new_actions)
-    new_action_entropy = self.outputnorm.normalize(new_action_entropy[:, None])[:, -1]  # use only the entropy component
-    loss_actor = new_action_entropy.mean() - new_value.mean()
+    # new_action_entropy = (1-self.discount) * new_action_distribution.log_prob(new_actions)
+    # new_action_entropy = self.outputnorm.normalize(new_action_entropy[:, None])[:, -1]  # use only the entropy component
+    # loss_actor = new_action_entropy.mean() - new_value.mean()
+    loss_actor = - new_value * self.outputnorm.std / self.outputnorm.std.sum()  # the relative scale still matters
+    loss_actor = loss_actor.mean()
 
     # update actor and critic
     self.critic_optimizer.zero_grad()

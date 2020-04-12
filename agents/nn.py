@@ -109,9 +109,7 @@ class TanhNormal(Distribution):
     else:
       pre_tanh_value = (torch.log(1 + x + self.epsilon) - torch.log(1 - x + self.epsilon)) / 2
     assert x.dim() == 2 and pre_tanh_value.dim() == 2
-    return self.normal.log_prob(pre_tanh_value) - torch.log(
-      1 - x * x + self.epsilon
-    )
+    return self.normal.log_prob(pre_tanh_value) - torch.log(1 - x * x + self.epsilon)
 
   def sample(self, sample_shape=torch.Size()):
     z = self.normal.sample(sample_shape)
