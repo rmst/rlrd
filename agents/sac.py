@@ -25,8 +25,8 @@ class Agent:
   lr: float = 0.0003  # learning rate
   discount: float = 0.99  # reward discount factor
   target_update: float = 0.005  # parameter for exponential moving average
-  reward_scale: float = 500.  # multiplied by 100 compared to the since we use expected instead of cumulative reward
-  entropy_scale: float = 100.  # multiplied by 100 compared to the since we use expected instead of cumulative reward
+  reward_scale: float = 5.
+  entropy_scale: float = 1.
   start_training: int = 10000
   device: str = None
   training_steps: float = 1.  # training steps per environment interaction step
@@ -73,17 +73,17 @@ class Agent:
     next_value = [c(next_obs, next_actions) for c in self.model_target.critics]
     next_value = reduce(torch.min, next_value)  # minimum action-value
     next_value = self.outputnorm_target.unnormalize(next_value)  # PopArt (not present in the original paper)
+    # next_value = self.outputnorm.unnormalize(next_value)  # PopArt (not present in the original paper)
 
     # predict entropy rewards in a separate dimension from the normal rewards (not present in the original paper)
-    # next_action_entropy = - (1. - terminals) * self.discount * next_action_distribution.log_prob(next_actions)
-    next_action_entropy = - new_action_distribution.log_prob(actions)  # not present in the original paper
+    next_action_entropy = - (1. - terminals) * self.discount * next_action_distribution.log_prob(next_actions)
     reward_components = torch.cat((
       self.reward_scale * rewards[:, None],
       self.entropy_scale * next_action_entropy[:, None],
     ), dim=1)  # shape = (batchsize, reward_components)
 
     # Instead of estimating the discounted cumulative future reward we're estimating the discounted reward. The expected discounted returns are proportional to cumulative returns but their scale is independent of the discount factor. This is not present in the original paper.
-    value_target = (1-self.discount) * reward_components + (1. - terminals[:, None]) * self.discount * next_value
+    value_target = reward_components + (1. - terminals[:, None]) * self.discount * next_value
     normalized_value_target = self.outputnorm.update(value_target)  # PopArt update and normalize
 
     values = [c(obs, actions) for c in self.model.critics]
@@ -94,11 +94,12 @@ class Agent:
     new_value = [c(obs, new_actions) for c in self.model.critics]  # new_actions with reparametrization trick
     new_value = reduce(torch.min, new_value)  # minimum action_values
     assert new_value.shape == (self.batchsize, 2)
-    # new_action_entropy = (1-self.discount) * new_action_distribution.log_prob(new_actions)
-    # new_action_entropy = self.outputnorm.normalize(new_action_entropy[:, None])[:, -1]  # use only the entropy component
-    # loss_actor = new_action_entropy.mean() - new_value.mean()
-    loss_actor = - new_value * self.outputnorm.std / self.outputnorm.std.sum()  # the relative scale still matters
-    loss_actor = loss_actor.mean()
+
+    new_value = self.outputnorm.unnormalize(new_value)
+    new_value[:, -1] -= self.entropy_scale * new_action_distribution.log_prob(new_actions)
+    value_reward, value_entropy = new_value.detach().mean(0)
+    value_weighted = self.outputnorm.normalize_sum(new_value.sum(1))  # preserves relative scale
+    loss_actor = - value_weighted.mean()
 
     # update actor and critic
     self.critic_optimizer.zero_grad()
@@ -114,10 +115,12 @@ class Agent:
     exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)
 
     return dict(
+      value_reward=value_reward,
+      value_entropy=value_entropy,
       loss_actor=loss_actor.detach(),
       loss_critic=loss_critic.detach(),
-      outputnorm_mean=float(self.outputnorm.mean.mean()),
-      outputnorm_std=float(self.outputnorm.std.mean()),
+      outputnorm_mean=self.outputnorm.mean.mean(),
+      outputnorm_std=self.outputnorm.std.norm(),
       memory_size=len(self.memory),
     )
 
