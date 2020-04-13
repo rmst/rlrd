@@ -16,6 +16,7 @@ from agents.envs import AvenueEnv
 from agents.util import partial, save_json, partial_to_dict, partial_from_dict, load_json, dump, load, git_info
 from agents.training import Training
 import agents.rtac
+import agents.rrtac
 import agents.sac
 
 
@@ -141,6 +142,14 @@ SacAvenueHdTraining = partial(
     Test=partial(number=0),  # laptop can't handle more than that
   )
 
+RrtacTraining = partial(
+  SacTraining,
+  Agent=partial(agents.rrtac.Agent, batchsize=32, history_length=8),
+  Env=partial(real_time=True),
+  Test=partial(number=1, workers=1),
+)
+
 # === tests ============================================================================================================
 if __name__ == "__main__":
   run(TestTraining)
+  # run(RrtacTraining)

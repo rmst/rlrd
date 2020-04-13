@@ -18,7 +18,8 @@ from agents.rrtac_models import LstmModel, LstmDouble
 class Agent(agents.sac.Agent):
   Model: type = LstmModel
   loss_alpha: float = 0.05
-  history_length: int = 1
+  history_length: int = 8
+  training_steps: float = 1/8  # training steps per environment interaction step
 
   def __post_init__(self, observation_space, action_space):
     device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -36,32 +37,35 @@ class Agent(agents.sac.Agent):
 
   def act(self, state, obs, r, done, info, train=False):
     stats = []
+    state = self.model.reset() if state is None else state  # initialize state if necessary
     action, next_state, _ = self.model.act(state, obs, r, done, info, train)
 
     if train:
-      self.memory.append(np.float32(r), np.float32(done), info, obs, next_state, action)
+      self.memory.append(np.float32(r), np.float32(done), info, obs, state, action)
       total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
-      for self.total_updates in range(self.total_updates, int(total_updates_target) + 1):
+      for self.total_updates in range(self.total_updates+1, int(total_updates_target)+1):
+        if self.total_updates == 1:
+          print("starting training")
         stats += self.train(),
     return action, next_state, stats
 
   def train(self):
-    obs, ms, a, r, terminals = self.memory.sample()
+    obs, state, a, r, terminals = self.memory.sample()
     terminals = terminals[:, None]  # expand for correct broadcasting below
 
     # torch.autograd.set_detect_anomaly(True)
 
-    ms_i = ms[0]  # we recompute all the following memory states
+    state_i = state[0]  # we recompute all the following memory states
     loss_actor = 0
     loss_critic = 0
     value_targets = []
     for i in range(self.history_length):
-      new_action_distribution, ms_i, _, critic_logits = self.model(ms_i, obs[i])
+      new_action_distribution, state_i, _, critic_logits = self.model(state_i, obs[i])
       new_actions = new_action_distribution.rsample()
       new_actions_log_prob = new_action_distribution.log_prob(new_actions)[:, None]
 
       # critic loss
-      _, _, next_value_target, _ = self.model_target(detach(ms_i), (obs[i+1][0], new_actions.detach()))
+      _, _, next_value_target, _ = self.model_target(detach(state_i), (obs[i+1][0], new_actions.detach()))
       next_value_target = reduce(torch.min, next_value_target)
 
       value_target = self.discount * self.outputnorm_target.unnormalize(next_value_target)
@@ -72,15 +76,15 @@ class Agent(agents.sac.Agent):
       values = tuple(c(h) for c, h in zip(self.model.critic_output_layers, critic_logits))  # recompute values (weights changed)
 
       assert values[0].shape == value_target.shape and not value_target.requires_grad
-      loss_critic += sum(mse_loss(v, value_target) for v in values)
+      loss_critic += sum(mse_loss(v, value_target) for v in values) / self.history_length
 
       # actor loss
-      _, _, next_value, _ = self.model_nograd(ms_i, (obs[i+1][0], new_actions))
+      _, _, next_value, _ = self.model_nograd(state_i, (obs[i+1][0], new_actions))
       next_value = reduce(torch.min, next_value)
       loss_actor_i = - (1. - terminals) * self.discount * self.outputnorm.unnormalize(next_value)
       loss_actor_i += self.entropy_scale * new_actions_log_prob
       assert loss_actor_i.shape == (self.batchsize, 1)
-      loss_actor += self.outputnorm.normalize(loss_actor_i).mean()
+      loss_actor += self.outputnorm.normalize(loss_actor_i).mean() / self.history_length
 
     # update model
     self.optimizer.zero_grad()

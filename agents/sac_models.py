@@ -22,7 +22,7 @@ class ActorModule(Module):
 
   def reset(self):
     """initializes the hidden state"""
-    return np.array(())
+    return np.array(())  # just so we don't get any errors when collating and partitioning
 
   def act(self, state, obs, r, done, info, train=False):
     """allows this module to be used with gym.Env
@@ -33,17 +33,6 @@ class ActorModule(Module):
       action = action_distribution.sample() if train else action_distribution.sample_deterministic()
     action, = partition(action)
     return action, state, []
-
-
-class StatefulActorModule(ActorModule):
-  def act(self, state, obs, r, done, info, train=False):
-    """actually uses the state and updates it within the actor"""
-    state, obs = collate([(state, obs)], device=self.device)
-    with torch.no_grad():
-      action_distribution, next_state = self.actor(state, obs)
-      action = action_distribution.sample() if train else action_distribution.sample_deterministic()
-    (action, next_state), = partition((action, next_state))
-    return action, next_state, []
 
 
 class MlpActionValue(Sequential):
