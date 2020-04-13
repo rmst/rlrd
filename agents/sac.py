@@ -97,9 +97,7 @@ class Agent:
 
     new_value = self.outputnorm.unnormalize(new_value)
     new_value[:, -1] -= self.entropy_scale * new_action_distribution.log_prob(new_actions)
-    value_reward, value_entropy = new_value.detach().mean(0)
-    value_weighted = self.outputnorm.normalize_sum(new_value.sum(1))  # preserves relative scale
-    loss_actor = - value_weighted.mean()
+    loss_actor = - self.outputnorm.normalize_sum(new_value.sum(1)).mean()  # normalize_sum preserves relative scale
 
     # update actor and critic
     self.critic_optimizer.zero_grad()
@@ -115,12 +113,12 @@ class Agent:
     exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)
 
     return dict(
-      value_reward=value_reward,
-      value_entropy=value_entropy,
       loss_actor=loss_actor.detach(),
       loss_critic=loss_critic.detach(),
-      outputnorm_mean=self.outputnorm.mean.mean(),
-      outputnorm_std=self.outputnorm.std.norm(),
+      outputnorm_reward_mean=self.outputnorm.mean[0],
+      outputnorm_entropy_mean=self.outputnorm.mean[-1],
+      outputnorm_reward_std=self.outputnorm.std[0],
+      outputnorm_entropy_std=self.outputnorm.std[-1],
       memory_size=len(self.memory),
     )
 

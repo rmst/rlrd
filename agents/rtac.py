@@ -34,21 +34,24 @@ class Agent(agents.sac.Agent):
 
   def train(self):
     obs, actions, rewards, next_obs, terminals = self.memory.sample()
-    rewards, terminals = rewards[:, None], terminals[:, None]  # expand for correct broadcasting below
 
     new_action_distribution, _, hidden = self.model(obs)
     new_actions = new_action_distribution.rsample()
-    new_actions_log_prob = new_action_distribution.log_prob(new_actions)[:, None]
+    new_actions_log_prob = new_action_distribution.log_prob(new_actions)
 
     # critic loss
     _, next_value_target, _ = self.model_target((next_obs[0], new_actions.detach()))
     next_value_target = reduce(torch.min, next_value_target)
+    next_value_target = self.outputnorm_target.unnormalize(next_value_target)
 
-    value_target = (1. - terminals) * self.discount * self.outputnorm_target.unnormalize(next_value_target)
-    value_target += self.reward_scale * rewards
-    value_target -= self.entropy_scale * new_actions_log_prob.detach()
+    reward_components = torch.stack((
+      self.reward_scale * rewards,
+      - self.entropy_scale * new_actions_log_prob.detach(),
+    ), dim=1)
+
+    value_target = reward_components + (1. - terminals[:, None]) * self.discount * next_value_target
+    # TODO: is it really that helpful/necessary to do the outnorm update here and to recompute the values?
     value_target = self.outputnorm.update(value_target)
-
     values = tuple(c(h) for c, h in zip(self.model.critic_output_layers, hidden))  # recompute values (weights changed)
 
     assert values[0].shape == value_target.shape and not value_target.requires_grad
@@ -57,10 +60,10 @@ class Agent(agents.sac.Agent):
     # actor loss
     _, next_value, _ = self.model_nograd((next_obs[0], new_actions))
     next_value = reduce(torch.min, next_value)
-    loss_actor = - (1. - terminals) * self.discount * self.outputnorm.unnormalize(next_value)
-    loss_actor += self.entropy_scale * new_actions_log_prob
-    assert loss_actor.shape == (self.batchsize, 1)
-    loss_actor = self.outputnorm.normalize(loss_actor).mean()
+    new_value = (1. - terminals[:, None]) * self.discount * self.outputnorm.unnormalize(next_value)
+    new_value[:, -1] -= self.entropy_scale * new_actions_log_prob
+    assert new_value.shape == (self.batchsize, 2)
+    loss_actor = - self.outputnorm.normalize_sum(new_value.sum(1)).mean()  # normalize_sum preserves relative scale
 
     # update model
     self.optimizer.zero_grad()
@@ -76,8 +79,10 @@ class Agent(agents.sac.Agent):
       loss_total=loss_total.detach(),
       loss_critic=loss_critic.detach(),
       loss_actor=loss_actor.detach(),
-      outputnorm_mean=float(self.outputnorm.mean),
-      outputnorm_std=float(self.outputnorm.std),
+      outputnorm_reward_mean=self.outputnorm.mean[0],
+      outputnorm_entropy_mean=self.outputnorm.mean[-1],
+      outputnorm_reward_std=self.outputnorm.std[0],
+      outputnorm_entropy_std=self.outputnorm.std[-1],
       memory_size=len(self.memory),
       # entropy_scale=self.entropy_scale
     )
@@ -98,17 +103,17 @@ AvenueAgent = partial(
 if __name__ == "__main__":
   from agents import Training, run
   from agents import rtac_models
-  Rtac_Test = partial(
+  RtacTest = partial(
     Training,
     epochs=3,
     rounds=5,
     steps=500,
     Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4),
-    # Env=partial(id="Pendulum-v0", real_time=True),
-    Env=partial(id="HalfCheetah-v2", real_time=True),
+    Env=partial(id="Pendulum-v0", real_time=True),
+    # Env=partial(id="HalfCheetah-v2", real_time=True),
   )
 
-  Rtac_Avenue_Test = partial(
+  RtacAvenueTest = partial(
     Training,
     epochs=3,
     rounds=5,
@@ -118,5 +123,5 @@ if __name__ == "__main__":
     Test=partial(number=0),  # laptop can't handle more than that
   )
 
-  run(Rtac_Test)
+  run(RtacTest)
   # run(Rtac_Avenue_Test)

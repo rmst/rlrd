@@ -21,7 +21,7 @@ class Mlp(ActorModule):
       SacLinear(input_dim, hidden_units), ReLU(),
       SacLinear(hidden_units, hidden_units), ReLU(),
     )
-    self.critic_layer = Linear(hidden_units, 1)
+    self.critic_layer = Linear(hidden_units, 2)  # predict future reward and entropy separately
     self.actor_layer = TanhNormalLayer(hidden_units, action_space.shape[0])
     self.critic_output_layers = (self.critic_layer,)
 
@@ -78,7 +78,7 @@ class ConvRTAC(ActorModule):
 
     self.lin1 = Linear(conv_size + vec_sp.shape[0] + ac_sp.shape[0], hidden_units)
     self.lin2 = Linear(hidden_units + vec_sp.shape[0] + ac_sp.shape[0], hidden_units)
-    self.critic_layer = Linear(hidden_units, 1)
+    self.critic_layer = Linear(hidden_units, 2)  # predict future reward and entropy separately
     self.actor_layer = TanhNormalLayer(hidden_units, action_space.shape[0])
     self.critic_output_layers = (self.critic_layer,)
 
