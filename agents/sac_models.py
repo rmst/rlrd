@@ -21,7 +21,7 @@ class ActorModule(Module):
     return super().to(device=device)
 
   def reset(self):
-    """initializes the hidden state"""
+    """Initialize the hidden state. This will be collated before being fed to the actual model and thus should be a structure of numpy arrays rather than torch tensors."""
     return np.array(())  # just so we don't get any errors when collating and partitioning
 
   def act(self, state, obs, r, done, info, train=False):

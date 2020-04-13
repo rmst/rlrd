@@ -127,7 +127,7 @@ if __name__ == "__main__":
     epochs=5,
     rounds=10,
     steps=200,
-    Agent=partial(Agent, Model=partial(LstmDouble, hidden_units=32), device='cuda', memory_size=1000000, start_training=200, batchsize=8),
+    Agent=partial(Agent, Model=partial(LstmDouble, hidden_units=32), device='cpu', memory_size=1000000, start_training=200, batchsize=8),
     # Agent=partial(Agent, Model=partial(LstmModel, hidden_units=32), device='cuda', memory_size=1000000, start_training=200, batchsize=8),
     Env=partial(id="Pendulum-v0", real_time=True),
     # Env=partial(id="HalfCheetah-v2", real_time=True),

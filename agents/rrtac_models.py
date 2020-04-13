@@ -1,9 +1,11 @@
 import gym
 import torch
+from torch.nn import Linear, LSTM
+import numpy as np
+
 from agents.nn import TanhNormalLayer
 from agents.sac_models import ActorModule
 from agents.util import collate, partition
-from torch.nn import Linear, LSTM
 
 
 class StatefulActorModule(ActorModule):
@@ -47,7 +49,8 @@ class LstmModel(StatefulActorModule):
     return a, memory_state
 
   def reset(self):
-    return torch.randn(self.hidden_units).to(self.device), torch.randn(self.hidden_units).to(self.device)
+    return (np.random.standard_normal(self.hidden_units).astype(np.float32),
+            np.random.standard_normal(self.hidden_units).astype(np.float32))
 
   def forward(self, memory_state, x):
     self.lstm.flatten_parameters()
