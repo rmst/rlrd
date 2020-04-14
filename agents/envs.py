@@ -49,8 +49,10 @@ class GymEnv(Env):
     if frame_skip:
       original_frame_skip = getattr(env.unwrapped, 'frame_skip', 1)  # on many Mujoco environments this is 5
       # print("Original frame skip", original_frame_skip)
-      if hasattr(env, 'dt'):
-        env.dt = env.dt  # in case this is an attribute we fix it to its orignal value to not distort rewards (see halfcheetah.py)
+
+      # I think the two lines below were actually a mistake after all (at least for HalfCheetah)
+      # if hasattr(env, 'dt'):
+      #   env.dt = env.dt  # in case this is an attribute we fix it to its orignal value to not distort rewards (see halfcheetah.py)
       env.unwrapped.frame_skip = 1
       tl = get_wrapper_by_class(env, TimeLimit)
       tl._max_episode_steps = int(tl._max_episode_steps * original_frame_skip)

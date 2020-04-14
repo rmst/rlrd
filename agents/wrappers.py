@@ -3,6 +3,7 @@ from random import randint
 
 import gym
 import numpy as np
+from gym.spaces import Tuple
 from gym.wrappers import TimeLimit
 
 
@@ -215,17 +216,25 @@ class FrameSkip(gym.Wrapper):
 
 
 class RandomDelayWrapper(gym.Wrapper):
-  def __init__(self, env, max_delay=10):
+  """Wrapper for any environment modelling random observation and action delays
+
+  Note that you can access most recent action known to be applied with past_actions[action_delay + observation_delay]
+  """
+  def __init__(self, env, max_observation_delay=8, max_action_delay=2):
     super().__init__(env)
-    self.max_delay = max_delay  # TODO: allow for different max obs and action delays
-    self.past_actions = deque(maxlen=max_delay)
-    self.past_observations = deque(maxlen=max_delay)
+    self.max_action_delay = max_action_delay
+    self.max_observation_delay = max_observation_delay
+
+    self.past_actions = deque(maxlen=max_observation_delay+max_action_delay)
+    self.past_observations = deque(maxlen=max_observation_delay)
     self.t = 0
-    self.arrival_times_actions = deque(maxlen=max_delay)
-    self.arrival_times_observations = deque(maxlen=max_delay)
+    self.arrival_times_actions = deque(maxlen=max_action_delay)
+    self.arrival_times_observations = deque(maxlen=max_observation_delay)
     self.done_signal_sent = False
 
-    # TODO: observation and action space
+    self.observation_space = Tuple(env.observation_space, Tuple([env.action_space] * (max_observation_delay+max_action_delay)))
+
+    self.current_action = None
 
   def reset(self, **kwargs):
     self.t = 0
@@ -233,8 +242,9 @@ class RandomDelayWrapper(gym.Wrapper):
     first_observation = super().reset(**kwargs)
 
     # fill up buffers
-    [self.send_action(self.action_space.sample()) for _ in range(self.max_delay)]
-    [self.send_observation((first_observation, 0., False, {})) for _ in range(self.max_delay)]
+    [self.send_action(self.action_space.sample()) for _ in range(self.max_observation_delay)]
+    [self.send_observation((first_observation, 0., False, {}, 0)) for _ in range(self.max_observation_delay)]
+    self.current_action = self.action_space.sample()
 
     received_observation, *_ = self.receive_observation()
     return received_observation
@@ -248,10 +258,10 @@ class RandomDelayWrapper(gym.Wrapper):
       # just resend the last observation until the brain gets it
       self.send_observation(self.past_observations[0])
     else:
-      most_recent_received_action_index = next(i for i, t in enumerate(self.arrival_times_actions) if t <= self.t)
-      action_to_apply = self.past_actions[most_recent_received_action_index]
-      m, r, d, info = self.env.step(action_to_apply)
-      self.send_observation((m, r, d, info, most_recent_received_action_index))
+      m, r, d, info = self.env.step(self.current_action)
+      action_delay = next(i for i, t in enumerate(self.arrival_times_actions) if t <= self.t)
+      self.current_action = self.past_actions[action_delay]
+      self.send_observation((m, r, d, info, action_delay))
 
     # at the brain again
     m, r, d, info = self.receive_observation()
@@ -261,19 +271,19 @@ class RandomDelayWrapper(gym.Wrapper):
 
   def send_action(self, action):
     # at the brain
-    self.arrival_times_actions.appendleft(self.t + randint(1, self.max_delay))  # TODO: could be any distribution
+    self.arrival_times_actions.appendleft(self.t + randint(1, self.max_observation_delay))  # TODO: could be any distribution
     self.past_actions.appendleft(action)
 
   def send_observation(self, obs):
     # at the remote actor
     self.past_observations.appendleft(obs)
-    self.arrival_times_observations.appendleft(self.t + randint(1, self.max_delay))  # TODO: could be any distribution
+    self.arrival_times_observations.appendleft(self.t + randint(1, self.max_observation_delay))  # TODO: could be any distribution
 
   def receive_observation(self):
     # at the brain
-    most_recent_received_observation_index = next(i for i, t in enumerate(self.arrival_times_observations) if t <= self.t)
-    m, r, d, info, action_index = self.past_observations[most_recent_received_observation_index]
-    return (m, action_index, tuple(self.past_actions)), r, d, info
+    observation_delay = next(i for i, t in enumerate(self.arrival_times_observations) if t <= self.t)
+    m, r, d, info, action_delay = self.past_observations[observation_delay]
+    return (m, tuple(self.past_actions), observation_delay, action_delay), r, d, info
 
 
 # === Utilities ========================================================================================================

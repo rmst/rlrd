@@ -82,7 +82,6 @@ class Agent:
       self.entropy_scale * next_action_entropy[:, None],
     ), dim=1)  # shape = (batchsize, reward_components)
 
-    # Instead of estimating the discounted cumulative future reward we're estimating the discounted reward. The expected discounted returns are proportional to cumulative returns but their scale is independent of the discount factor. This is not present in the original paper.
     value_target = reward_components + (1. - terminals[:, None]) * self.discount * next_value
     normalized_value_target = self.outputnorm.update(value_target)  # PopArt update and normalize
 
