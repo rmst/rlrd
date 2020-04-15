@@ -2,11 +2,11 @@
 
 Usage:
 
-  python -m agents run agents:RtacTraining Env.id=Pendulum-v0
+	python -m agents run agents:RtacTraining Env.id=Pendulum-v0
 
 or
 
-  python -m agents run-fs agents-checkpoint-0 agents:RtacTraining Env.id=Pendulum-v0
+	python -m agents run-fs agents-checkpoint-0 agents:RtacTraining Env.id=Pendulum-v0
 """
 
 import sys

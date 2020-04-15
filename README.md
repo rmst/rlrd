@@ -72,3 +72,7 @@ run = rtrl.load('experiment-1/state')
 print(run.agent.memory[0])
 ``` 
 
+
+### Contributing
+Currently, the PEP8 style guide is followed with the exception that we use tabs rather than spaces and line lengths are not limited.
+
