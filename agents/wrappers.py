@@ -254,7 +254,6 @@ class RandomDelayWrapper(gym.Wrapper):
 			self.t += 1
 
 		assert self.t == 0
-		self.current_action = self.action_space.sample()
 		received_observation, *_ = self.receive_observation()
 		return received_observation
 
@@ -265,7 +264,7 @@ class RandomDelayWrapper(gym.Wrapper):
 		# at the remote actor
 		if self.t < self.max_action_delay:
 			# do nothing until the brain's first actions arrive at the remote actor
-			pass
+			self.receive_action()
 		elif self.done_signal_sent:
 			# just resend the last observation until the brain gets it
 			self.send_observation(self.past_observations[0])
