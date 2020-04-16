@@ -221,8 +221,9 @@ class RandomDelayWrapper(gym.Wrapper):
 	Note that you can access most recent action known to be applied with past_actions[action_delay + observation_delay]
 	"""
 
-	def __init__(self, env, max_observation_delay=8, max_action_delay=2):
+	def __init__(self, env, max_observation_delay=8, max_action_delay=2, instant_rewards: bool = True):
 		super().__init__(env)
+		self.instant_rewards = instant_rewards
 		self.max_action_delay = max_action_delay
 		self.max_observation_delay = max_observation_delay
 
@@ -265,19 +266,21 @@ class RandomDelayWrapper(gym.Wrapper):
 		if self.t < self.max_action_delay:
 			# do nothing until the brain's first actions arrive at the remote actor
 			self.receive_action()
+			aux = 0, False, {}
 		elif self.done_signal_sent:
 			# just resend the last observation until the brain gets it
 			self.send_observation(self.past_observations[0])
+			aux = 0, False, {}
 		else:
-			m, r, d, info = self.env.step(self.current_action)
+			m, *aux = self.env.step(self.current_action)
 			action_delay = self.receive_action()
-			self.send_observation((m, r, d, info, action_delay))
+			self.send_observation((m, *aux, action_delay))
 
 		# at the brain again
-		m, r, d, info = self.receive_observation()
-
+		m, *delayed_aux = self.receive_observation()
+		aux = aux if self.instant_rewards else delayed_aux
 		self.t += 1
-		return m, r, d, info
+		return (m, *aux)
 
 	def send_action(self, action):
 		# at the brain
