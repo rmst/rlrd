@@ -19,10 +19,10 @@ class Mlp(ActorModule):
 		assert isinstance(observation_space, gym.spaces.Tuple)
 		input_dim = sum(s.shape[0] for s in observation_space)
 		self.net = Sequential(
-			# SacLinear(input_dim, hidden_units), ReLU(),
-			# SacLinear(hidden_units, hidden_units), ReLU(),
-			Linear(input_dim, hidden_units), ReLU(),
-			Linear(hidden_units, hidden_units), ReLU(),
+			SacLinear(input_dim, hidden_units), ReLU(),
+			SacLinear(hidden_units, hidden_units), ReLU(),
+			# Linear(input_dim, hidden_units), ReLU(),
+			# Linear(hidden_units, hidden_units), ReLU(),
 		)
 		self.critic_layer = Linear(hidden_units, 2)  # predict future reward and entropy separately
 		self.actor_layer = TanhNormalLayer(hidden_units, action_space.shape[0])

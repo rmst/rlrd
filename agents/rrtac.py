@@ -45,10 +45,11 @@ class Agent(agents.sac.Agent):
 			self.environment_steps += 1
 
 			total_updates_target = (self.environment_steps - self.start_training) * self.training_steps
-			for self.total_updates in range(self.total_updates + 1, int(total_updates_target) + 1):
-				if self.total_updates == 1:
+			while self.total_updates < int(total_updates_target):
+				if self.total_updates == 0:
 					print("starting training")
 				stats += self.train(),
+				self.total_updates += 1
 		return action, next_state, stats
 
 	def train(self):
