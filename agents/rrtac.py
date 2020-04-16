@@ -42,7 +42,9 @@ class Agent(agents.sac.Agent):
 
 		if train:
 			self.memory.append(np.float32(r), np.float32(done), info, obs, state, action)
-			total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
+			self.environment_steps += 1
+			
+			total_updates_target = (self.environment_steps - self.start_training) * self.training_steps
 			for self.total_updates in range(self.total_updates + 1, int(total_updates_target) + 1):
 				if self.total_updates == 1:
 					print("starting training")

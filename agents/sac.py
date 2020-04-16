@@ -34,6 +34,7 @@ class Agent:
 	model_nograd = cached_property(lambda self: no_grad(copy_shared(self.model)))
 
 	total_updates = 0  # will be (len(self.memory)-start_training) * training_steps / training_interval
+	environment_steps = 0
 
 	def __post_init__(self, observation_space, action_space):
 		device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -55,7 +56,9 @@ class Agent:
 
 		if train:
 			self.memory.append(np.float32(r), np.float32(done), info, obs, action)
-			total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
+			self.environment_steps += 1
+
+			total_updates_target = (self.environment_steps - self.start_training) * self.training_steps
 			for self.total_updates in range(self.total_updates + 1, int(total_updates_target) + 1):
 				if self.total_updates == 1:
 					print("starting training")
