@@ -237,7 +237,7 @@ class RandomDelayWrapper(gym.Wrapper):
 
 		self.observation_space = Tuple((
 			env.observation_space,  # most recent observation
-			Tuple([env.action_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
+			Tuple([env.action_space] * (obs_delay_range.stop + act_delay_range.stop - 1)),  # action buffer
 			Discrete(obs_delay_range.stop),  # observation delay int64
 			Discrete(act_delay_range.stop),  # action delay int64
 		))
