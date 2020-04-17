@@ -42,12 +42,11 @@ class Env(gym.Wrapper):
 
 
 class GymEnv(Env):
-	def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0):
+	def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0, obs_scale: float = 0.):
 		env = gym.make(id)
 
-		# The following is to test whether we can get rid off the weird initialization in our MLPs
-		if id == 'HalfCheetah-v2':
-			env = AffineObservationWrapper(env, 0, 1/15)
+		if obs_scale:
+			env = AffineObservationWrapper(env, 0, obs_scale)
 
 		if frame_skip:
 			original_frame_skip = getattr(env.unwrapped, 'frame_skip', 1)  # on many Mujoco environments this is 5
