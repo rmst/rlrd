@@ -4,7 +4,8 @@ from dataclasses import dataclass, InitVar
 import gym
 from gym.wrappers import TimeLimit
 
-from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class, RandomDelayWrapper
+from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class
+from agents.wrappers_random_delays import RandomDelayWrapper
 import numpy as np
 
 
@@ -103,7 +104,13 @@ class AvenueEnv(Env):
 
 
 class RandomDelayEnv(Env):
-	def __init__(self, seed_val=0, id: str = "Pendulum-v0", frame_skip: int = 0, sup_observation_delay: int = 8, sup_action_delay: int = 2):
+	def __init__(self,
+		seed_val=0, id: str = "Pendulum-v0",
+		frame_skip: int = 0,
+		min_observation_delay: int = 0,
+		sup_observation_delay: int = 8,
+		min_action_delay: int = 0,
+		sup_action_delay: int = 2):
 		env = gym.make(id)
 
 		if frame_skip:
@@ -123,7 +130,7 @@ class RandomDelayEnv(Env):
 		env = Float64ToFloat32(env)
 		assert isinstance(env.action_space, gym.spaces.Box)
 		env = NormalizeActionWrapper(env)
-		env = RandomDelayWrapper(env, range(0, sup_observation_delay), range(0, sup_action_delay))
+		env = RandomDelayWrapper(env, range(min_observation_delay, sup_observation_delay), range(min_action_delay, sup_action_delay))
 		super().__init__(env)
 
 
