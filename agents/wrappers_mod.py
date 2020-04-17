@@ -217,7 +217,7 @@ class FrameSkip(gym.Wrapper):
 
 class RandomDelayWrapper(gym.Wrapper):
 	"""
-	Wrapper for any environment modelling random observation and action delays
+	Wrapper for any non-RTRL environment modelling random observation and action delays
 	Note that you can access most recent action known to be applied with past_actions[action_delay + observation_delay]
 	NB: action_delay represents action channel delay + number of time-steps for which it has been applied
 		The brain only needs this information to identify the action that was being executed when the observation was captured
@@ -368,8 +368,9 @@ class UnseenRandomDelayWrapper(RandomDelayWrapper):
 	Use this wrapper to see what happens to vanilla RL algorithms facing random delays
 	"""
 
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
+	def __init__(self, env, **kwargs):
+		super().__init__(env, **kwargs)
+		self.observation_space = env.observation_space
 
 	def reset(self, **kwargs):
 		t = super().reset(**kwargs)  # t: (m, tuple(self.past_actions), observation_delay, action_delay)
