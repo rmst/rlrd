@@ -5,7 +5,7 @@ import gym
 from gym.wrappers import TimeLimit
 
 from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class
-from agents.wrappers_random_delays import RandomDelayWrapper
+from agents.wrappers_rd import RandomDelayWrapper
 import numpy as np
 
 
