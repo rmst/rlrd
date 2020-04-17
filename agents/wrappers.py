@@ -1,5 +1,5 @@
 from collections import Sequence, Mapping, deque
-from random import randint, randrange
+from random import randint, randrange, sample
 
 import gym
 import numpy as np
@@ -221,23 +221,23 @@ class RandomDelayWrapper(gym.Wrapper):
 	Note that you can access most recent action known to be applied with past_actions[action_delay + observation_delay]
 	"""
 
-	def __init__(self, env, max_observation_delay=8, max_action_delay=2, instant_rewards: bool = True):
+	def __init__(self, env, obs_delay_range=range(0, 8), act_delay_range=range(0, 2), instant_rewards: bool = True):
 		super().__init__(env)
+		self.act_delay_range = act_delay_range
+		self.obs_delay_range = obs_delay_range
 		self.instant_rewards = instant_rewards
-		self.max_action_delay = max_action_delay
-		self.max_observation_delay = max_observation_delay
 
 		self.observation_space = Tuple((
 			env.observation_space,  # most recent observation
-			Tuple([env.action_space] * (max_observation_delay + max_action_delay)),  # action buffer
-			Discrete(max_observation_delay),  # observation delay int64
-			Discrete(max_action_delay),  # action delay int64
+			Tuple([env.action_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
+			Discrete(obs_delay_range.stop),  # observation delay int64
+			Discrete(act_delay_range.stop),  # action delay int64
 		))
 
-		self.past_actions = deque(maxlen=max_observation_delay + max_action_delay)
-		self.past_observations = deque(maxlen=max_observation_delay)
-		self.arrival_times_actions = deque(maxlen=max_action_delay)
-		self.arrival_times_observations = deque(maxlen=max_observation_delay)
+		self.past_actions = deque(maxlen=obs_delay_range.stop + act_delay_range.stop)
+		self.past_observations = deque(maxlen=obs_delay_range.stop)
+		self.arrival_times_actions = deque(maxlen=act_delay_range.stop)
+		self.arrival_times_observations = deque(maxlen=obs_delay_range.stop)
 
 		self.t = 0
 		self.done_signal_sent = False
@@ -248,7 +248,7 @@ class RandomDelayWrapper(gym.Wrapper):
 		first_observation = super().reset(**kwargs)
 
 		# fill up buffers
-		self.t = - (self.max_observation_delay + self.max_action_delay)
+		self.t = - (self.obs_delay_range.stop + self.act_delay_range.stop)
 		while self.t < 0:
 			self.send_action(self.action_space.sample())
 			self.send_observation((first_observation, 0., False, {}, 0))
@@ -263,7 +263,7 @@ class RandomDelayWrapper(gym.Wrapper):
 		self.send_action(action)
 
 		# at the remote actor
-		if self.t < self.max_action_delay:
+		if self.t < self.act_delay_range.stop:
 			# do nothing until the brain's first actions arrive at the remote actor
 			self.receive_action()
 			aux = 0, False, {}
@@ -284,7 +284,8 @@ class RandomDelayWrapper(gym.Wrapper):
 
 	def send_action(self, action):
 		# at the brain
-		self.arrival_times_actions.appendleft(self.t + randrange(0, self.max_action_delay))  # TODO: could be any distribution
+		delay, = sample(self.act_delay_range, 1)
+		self.arrival_times_actions.appendleft(self.t + delay)
 		self.past_actions.appendleft(action)
 
 	def receive_action(self):
@@ -294,8 +295,9 @@ class RandomDelayWrapper(gym.Wrapper):
 
 	def send_observation(self, obs):
 		# at the remote actor
+		delay, = sample(self.obs_delay_range, 1)
+		self.arrival_times_observations.appendleft(self.t + delay)
 		self.past_observations.appendleft(obs)
-		self.arrival_times_observations.appendleft(self.t + randrange(0, self.max_observation_delay))  # TODO: could be any distribution
 
 	def receive_observation(self):
 		# at the brain

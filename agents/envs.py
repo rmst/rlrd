@@ -45,6 +45,10 @@ class GymEnv(Env):
 	def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0):
 		env = gym.make(id)
 
+		# The following is to test whether we can get rid off the weird initialization in our MLPs
+		if id == 'HalfCheetah-v2':
+			env = AffineObservationWrapper(env, 0, 1/15)
+
 		if frame_skip:
 			original_frame_skip = getattr(env.unwrapped, 'frame_skip', 1)  # on many Mujoco environments this is 5
 			# print("Original frame skip", original_frame_skip)
@@ -100,7 +104,7 @@ class AvenueEnv(Env):
 
 
 class RandomDelayEnv(Env):
-	def __init__(self, seed_val=0, id: str = "Pendulum-v0", frame_skip: int = 0, max_observation_delay: int = 8, max_action_delay: int = 2):
+	def __init__(self, seed_val=0, id: str = "Pendulum-v0", frame_skip: int = 0, sup_observation_delay: int = 8, sup_action_delay: int = 2):
 		env = gym.make(id)
 
 		if frame_skip:
@@ -120,7 +124,7 @@ class RandomDelayEnv(Env):
 		env = Float64ToFloat32(env)
 		assert isinstance(env.action_space, gym.spaces.Box)
 		env = NormalizeActionWrapper(env)
-		env = RandomDelayWrapper(env, max_observation_delay, max_action_delay)
+		env = RandomDelayWrapper(env, range(0, sup_observation_delay), range(0, sup_action_delay))
 		super().__init__(env)
 
 
