@@ -11,8 +11,8 @@ import agents.sac
 from agents.memory import Memory
 from agents.nn import no_grad, exponential_moving_average
 from agents.util import partial
-from agents.drtac_models import DelayedBranchedMlpDouble
 
+from agents.drtac_models import DelayedBranchedMlpDouble
 from agents.envs import RandomDelayEnv
 
 
