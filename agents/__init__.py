@@ -90,7 +90,7 @@ def run_fs(path: str, run_cls: type = Training):
 		dump(pd.DataFrame(), path + '/stats')
 	for stats in iterate_episodes(run_cls, path + '/state'):
 		dump(load(path + '/stats').append(stats, ignore_index=True),
-		     path + '/stats')  # concat with stats from previous episodes
+             path + '/stats')  # concat with stats from previous episodes
 
 
 # === specifications ===================================================================================================

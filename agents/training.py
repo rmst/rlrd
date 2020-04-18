@@ -1,4 +1,5 @@
 from copy import deepcopy
+import pickle
 from dataclasses import dataclass
 
 import pandas as pd
@@ -52,6 +53,8 @@ class Training:
 				)
 
 				for step in range(self.steps):
+					assert 'env_state' not in env.transition[3]
+					env.transition[3]['env_state'] = pickle.dumps(env)
 					action, state, training_stats = self.agent.act(state, *env.transition, train=True)
 					stats_training += training_stats
 					env.step(action)
