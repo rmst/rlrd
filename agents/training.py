@@ -12,6 +12,7 @@ from agents.testing import Test
 from agents.util import pandas_dict, cached_property
 from agents.wrappers import StatsWrapper
 from agents.envs import GymEnv
+from agents.batch_env import get_env_state
 
 
 @dataclass(eq=0)
@@ -54,7 +55,7 @@ class Training:
 
 				for step in range(self.steps):
 					assert 'env_state' not in env.transition[3]
-					env.transition[3]['env_state'] = pickle.dumps(env)
+					env.transition[3]['env_state'] = pickle.dumps(get_env_state(env.env))
 					action, state, training_stats = self.agent.act(state, *env.transition, train=True)
 					stats_training += training_stats
 					env.step(action)

@@ -11,6 +11,7 @@ from agents.memory import Memory
 from agents.nn import PopArt, no_grad, copy_shared, exponential_moving_average, hd_conv
 from agents.util import cached_property, partial
 import agents.sac_models
+from agents.envs import GymEnv
 from agents.batch_env import BatchEnv
 
 
@@ -36,6 +37,9 @@ class Agent:
 
 	total_updates = 0  # will be (len(self.memory)-start_training) * training_steps / training_interval
 
+	env_id = 'Ant-v2' # TODO 
+	n_step_avg = 4
+
 	def __post_init__(self, observation_space, action_space):
 		device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
 		model = self.Model(observation_space, action_space)
@@ -48,6 +52,8 @@ class Agent:
 
 		self.outputnorm = self.OutputNorm(self.model.critic_output_layers)
 		self.outputnorm_target = self.OutputNorm(self.model_target.critic_output_layers)
+
+		self.batch_env = BatchEnv(partial(GymEnv, id=self.env_id), batch_size=self.batchsize, num_avg=self.n_step_avg)
 
 	def act(self, state, obs, r, done, info, train=False):
 		stats = []
@@ -63,41 +69,37 @@ class Agent:
 				stats += self.train(),
 		return action, next_state, stats
 
-	def n_step_returns(self, env_states, actions):
+	def n_step_returns(self, env_states, actions, num_steps=16):
 
 		print('computing n-step return')
-		NUM_AVG = 4
-		NUM_STEPS = 16
 		device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
 
-		batch_env = BatchEnv(NUM_AVG)
-		batch_env.init_from_pickle(env_states)
-		obs_, rew_, don_, _ = batch_env.step(actions.cpu().numpy())
+		self.batch_env.init_from_pickle(env_states)
+		obs_, rew_, don_, _ = self.batch_env.step(actions.cpu().numpy())
 		rewards_traj = [torch.tensor(rew_).to(device)]
 		done_mask = [torch.tensor(don_).to(device)]
-		for _ in range(NUM_STEPS): # n steps
-			obs_ = (torch.from_numpy(np.array(obs_)).squeeze(1).to(device),)
+		for _ in range(num_steps): # n steps
+			obs_ = (torch.from_numpy(np.array(obs_)).squeeze(2).to(device),)
 			act_ = self.model_nograd.actor(obs_).sample()
-			obs_, rew_, don_, _ = batch_env.step(actions.cpu().numpy())
+			obs_, rew_, don_, _ = self.batch_env.step(actions.cpu().numpy())
 			rewards_traj.append(torch.tensor(rew_).to(device))
 			done_mask.append(torch.tensor(don_).to(device))
 
-		batch_env.destroy()
-
 		# get next action
-		obs_ = (torch.from_numpy(np.array(obs_)).squeeze(1).to(device),)
+		obs_ = (torch.from_numpy(np.array(obs_)).squeeze(2).to(device),)
 		act_ = self.model_nograd.actor(obs_).sample()
 
 		next_val_ = [c(obs_, act_) for c in self.model_target.critics]
-		next_val_ = reduce(torch.min, next_val_)
-		next_val_ = self.outputnorm_target.unnormalize(next_val_)
+		next_val_ = reduce(torch.min, torch.stack(next_val_))
+		#next_val_ = self.outputnorm_target.unnormalize(next_val_)
 
 		# accumulate
-		val_ = next_val_[:,0] # XXX ignore entropy component for now
+		val_ = next_val_[:, :, 0] # XXX ignore entropy component for now
 		for rew_, don_ in zip(reversed(rewards_traj), reversed(done_mask)):
 			val_ = rew_ + (1. - don_.float()) * self.discount * val_
 
-		return val_.view(-1, NUM_AVG).mean(dim=1)
+		return val_.mean(dim=0)
+
 
 	def train(self):
 		(obs, actions, rewards, next_obs, terminals), env_states = self.memory.sample()  # sample a transition from the replay buffer
@@ -105,8 +107,9 @@ class Agent:
 		new_actions = new_action_distribution.rsample()  # samples using the reparametrization trick
 
 		with torch.no_grad():
-			n_step_val = self.n_step_returns(env_states, actions)
-		print('n-step-val', n_step_val.mean())
+			actions_rep = actions.unsqueeze(0).repeat(self.n_step_avg, 1, 1)
+			n_step_val = self.n_step_returns(env_states, actions_rep, num_steps=16)
+			print('n-step-val', n_step_val.mean())
 
 		# critic loss
 		next_action_distribution = self.model_nograd.actor(next_obs)  # outputs distribution object
@@ -161,8 +164,8 @@ class Agent:
 			outputnorm_reward_std=self.outputnorm.std[0],
 			outputnorm_entropy_std=self.outputnorm.std[-1],
 			memory_size=len(self.memory),
-			#n_step_value_mean=n_step_val.mean(),
-			#n_step_value_std=n_step_val.std(),
+			n_step_value_mean=n_step_val.mean(),
+			n_step_value_std=n_step_val.std(),
 		)
 
 
