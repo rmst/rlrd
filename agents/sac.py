@@ -3,6 +3,7 @@ from copy import deepcopy, copy
 from dataclasses import dataclass, InitVar
 from functools import lru_cache, reduce
 from itertools import chain
+import time
 import numpy as np
 import torch
 from torch.nn.functional import mse_loss
@@ -37,7 +38,7 @@ class Agent:
 
 	total_updates = 0  # will be (len(self.memory)-start_training) * training_steps / training_interval
 
-	env_id = 'Ant-v2' # TODO 
+	env_id = 'Ant-v2' # TODO get this from config
 	n_step_avg = 4
 
 	def __post_init__(self, observation_space, action_space):
@@ -49,9 +50,6 @@ class Agent:
 		self.actor_optimizer = torch.optim.Adam(self.model.actor.parameters(), lr=self.lr)
 		self.critic_optimizer = torch.optim.Adam(self.model.critics.parameters(), lr=self.lr)
 		self.memory = Memory(self.memory_size, self.batchsize, device)
-
-		self.outputnorm = self.OutputNorm(self.model.critic_output_layers)
-		self.outputnorm_target = self.OutputNorm(self.model_target.critic_output_layers)
 
 		self.batch_env = BatchEnv(partial(GymEnv, id=self.env_id), batch_size=self.batchsize, num_avg=self.n_step_avg)
 
@@ -71,7 +69,6 @@ class Agent:
 
 	def n_step_returns(self, env_states, actions, num_steps=16):
 
-		print('computing n-step return')
 		device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
 
 		self.batch_env.init_from_pickle(env_states)
@@ -91,7 +88,7 @@ class Agent:
 
 		next_val_ = [c(obs_, act_) for c in self.model_target.critics]
 		next_val_ = reduce(torch.min, torch.stack(next_val_))
-		#next_val_ = self.outputnorm_target.unnormalize(next_val_)
+        # XXX not normalizing
 
 		# accumulate
 		val_ = next_val_[:, :, 0] # XXX ignore entropy component for now
@@ -107,17 +104,16 @@ class Agent:
 		new_actions = new_action_distribution.rsample()  # samples using the reparametrization trick
 
 		with torch.no_grad():
+			t = time.time()
 			actions_rep = actions.unsqueeze(0).repeat(self.n_step_avg, 1, 1)
 			n_step_val = self.n_step_returns(env_states, actions_rep, num_steps=16)
-			print('n-step-val', n_step_val.mean())
+			print('DEBUG: n-step value: %0.2f (took %0.2fs)' % (time.time() - t, n_step_val.cpu().numpy().mean()))
 
 		# critic loss
 		next_action_distribution = self.model_nograd.actor(next_obs)  # outputs distribution object
 		next_actions = next_action_distribution.sample()  # samples
 		next_value = [c(next_obs, next_actions) for c in self.model_target.critics]
 		next_value = reduce(torch.min, next_value)  # minimum action-value
-		next_value = self.outputnorm_target.unnormalize(next_value)  # PopArt (not present in the original paper)
-		# next_value = self.outputnorm.unnormalize(next_value)  # PopArt (not present in the original paper)
 
 		# predict entropy rewards in a separate dimension from the normal rewards (not present in the original paper)
 		next_action_entropy = - (1. - terminals) * self.discount * next_action_distribution.log_prob(next_actions)
@@ -128,7 +124,7 @@ class Agent:
 
 		value_target = reward_components + (1. - terminals[:, None]) * self.discount * next_value
 
-		normalized_value_target = self.outputnorm.update(value_target)  # PopArt update and normalize
+		normalized_value_target = value_target # XXX not normalizing
 
 		values = [c(obs, actions) for c in self.model.critics]
 		assert values[0].shape == normalized_value_target.shape and not normalized_value_target.requires_grad
@@ -139,9 +135,8 @@ class Agent:
 		new_value = reduce(torch.min, new_value)  # minimum action_values
 		assert new_value.shape == (self.batchsize, 2)
 
-		new_value = self.outputnorm.unnormalize(new_value)
 		new_value[:, -1] -= self.entropy_scale * new_action_distribution.log_prob(new_actions)
-		loss_actor = - self.outputnorm.normalize_sum(new_value.sum(1)).mean()  # normalize_sum preserves relative scale
+		loss_actor = - new_value.sum(1).mean()
 
 		# update actor and critic
 		self.critic_optimizer.zero_grad()
@@ -154,15 +149,10 @@ class Agent:
 
 		# update target critics and normalizers
 		exponential_moving_average(self.model_target.critics.parameters(), self.model.critics.parameters(), self.target_update)
-		exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)
 
 		return dict(
 			loss_actor=loss_actor.detach(),
 			loss_critic=loss_critic.detach(),
-			outputnorm_reward_mean=self.outputnorm.mean[0],
-			outputnorm_entropy_mean=self.outputnorm.mean[-1],
-			outputnorm_reward_std=self.outputnorm.std[0],
-			outputnorm_entropy_std=self.outputnorm.std[-1],
 			memory_size=len(self.memory),
 			n_step_value_mean=n_step_val.mean(),
 			n_step_value_std=n_step_val.std(),

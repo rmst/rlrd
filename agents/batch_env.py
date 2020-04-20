@@ -40,17 +40,16 @@ def _set_envs_from_pickle(envs):
     _envs = [pickle.loads(e) for e in envs]
 
 
+
+
 class BatchEnv:
     def __init__(self, Env, batch_size=128, num_avg=32):
         self.num_avg = num_avg
         self.envs = [[Env() for _ in range(batch_size)] for _ in range(num_avg)]
 
     def init_from_pickle(self, states):
-        if USE_MP:
-            NotImplemented
-        else:
-            for envs in self.envs:
-                self._init_from_state_dict(envs, map(pickle.loads, states))
+        for envs in self.envs:
+            self._init_from_state_dict(envs, map(pickle.loads, states))
 
     def _init_from_state_dict(self, envs, states):
         all(map(lambda args: set_env_state(*args), zip(envs, states)))
@@ -60,7 +59,9 @@ class BatchEnv:
             # first action
             actions = actions.repeat(self.num_avg, 0)
         if USE_MP:
-            NotImplemented
+            if not hasattr(self, 'pool'):
+                self.pool = mp.Pool()
+            res = self.pool.map(_step_nd, zip(self.envs, actions))
         else:
             res = list(map(_step_nd, zip(self.envs, actions)))
 
