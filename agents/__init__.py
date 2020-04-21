@@ -18,6 +18,7 @@ from agents.training import Training
 import agents.rtac
 import agents.rrtac
 import agents.sac
+import agents.sac_nstep
 
 
 def iterate_episodes(run_cls: type = Training, checkpoint_path: str = None):
@@ -110,6 +111,14 @@ SacTraining = partial(
 	Env=partial(id="Pendulum-v0"),
 	Test=partial(number=1, workers=1),
 )
+
+SacNstepTraining = partial(
+	Training,
+	Agent=partial(agents.sac_nstep.Agent),
+	Env=partial(id="Pendulum-v0", store_env=True),
+	#Test=partial(number=1, workers=1),
+)
+
 
 RtacTraining = partial(
 	SacTraining,

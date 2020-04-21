@@ -29,10 +29,7 @@ class Training:
 
 	def __post_init__(self):
 		self.epoch = 0
-		with self.Env() as env:
-			# print("Environment:", self.env)
-			# noinspection PyArgumentList
-			self.agent = self.Agent(env.observation_space, env.action_space)
+		self.agent = self.Agent(self.Env)
 
 	def run_epoch(self):
 		stats = []
@@ -54,8 +51,6 @@ class Training:
 				)
 
 				for step in range(self.steps):
-					assert 'env_state' not in env.transition[3]
-					env.transition[3]['env_state'] = pickle.dumps(get_env_state(env.env))
 					action, state, training_stats = self.agent.act(state, *env.transition, train=True)
 					stats_training += training_stats
 					env.step(action)

@@ -4,7 +4,6 @@ import pickle
 import multiprocessing as mp
 import time
 import torch
-from agents.envs import GymEnv
 from agents.util import partial
 
 
@@ -38,7 +37,6 @@ def _step_nd(args):
 
 def _set_envs_from_pickle(envs):
     _envs = [pickle.loads(e) for e in envs]
-
 
 
 
@@ -87,6 +85,7 @@ if __name__ == '__main__':
     num_avg = 8
     num_steps = 20
 
+    from agents.envs import GymEnv
     e = GymEnv(id='Ant-v2')
     e.reset()
 

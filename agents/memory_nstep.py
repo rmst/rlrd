@@ -25,7 +25,8 @@ class Memory:
 				store = not info.get('TimeLimit.truncated', False) and not info.get('reset', False)
 
 			if store:
-				self.memory.append((self.last_observation, self.last_action, r, obs, done))
+				env_state = info.get('env_state', b'')
+				self.memory.append((self.last_observation, self.last_action, r, obs, done, env_state))
 
 		self.last_observation = obs
 		self.last_action = action
@@ -47,8 +48,11 @@ class Memory:
 	def sample(self, indices=None):
 		indices = self.sample_indices() if indices is None else indices
 		batch = [self.memory[idx] for idx in indices]
+		env_state = [b[-1] for b in batch]
+		batch = [b[:-1] for b in batch] # UGLY
+
 		batch = collate(batch, self.device)
-		return batch
+		return batch, env_state
 
 
 class TrajMemory:
