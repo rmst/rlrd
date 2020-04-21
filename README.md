@@ -1,16 +1,6 @@
-# Real-Time Reinforcement Learning
+# Agent
 
-This repo is accompanying our paper "Real-Time Reinforcement Learning" (https://arxiv.org/abs/1911.04448).
-
-<p align="center">
-  <img src="/resources/rl-rtrl.png" width=70% />
-</p>
-<p align="center">
-  Traditional Reinforcement Learning
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  Real-Time Reinforcement Learning
-</p>
-
+Reinforcement Learning Agents in Pytorch
 
 ### Getting Started
 This repo can be pip-installed via
@@ -56,19 +46,19 @@ Note that this requires a lot of resources, especially memory (16GB+).
 
 
 ### Storing Stats
-`python -m rtrl run` just prints stats to stdout. To save stats use the following instead.
+`python -m agents run` just prints stats to stdout. To save stats use the following instead.
 ```bash
 python -m agents run-fs experiment-1 agents:RtacTraining Env.id=Pendulum-v0
 ```
 Stats are generated and printed every `round` but only saved to disk every `epoch`. The stats will be saved as pickled pandas dataframes in `experiment-1/stats`.
 
 ### Checkpointing
-This repo supports checkpointing. Every `epoch` the whole run object (e.g. instances of `rtrl.training:Training`) is pickled to disk and reloaded. This is to ensure reproducibilty.
+This repo supports checkpointing. Every `epoch` the whole run object (e.g. instances of `agents.training:Training`) is pickled to disk and reloaded. This is to ensure reproducibilty.
 
-You can manually load and inspect pickled run instances with the standard `pickle:load` or the more convenient `rtrl:load`. For example, to look at the first transition in a SAC agent's replay memory run
+You can manually load and inspect pickled run instances with the standard `pickle:load` or the more convenient `agents:load`. For example, to look at the first transition in a SAC agent's replay memory run
 ```python
-import rtrl
-run = rtrl.load('experiment-1/state')
+import agents
+run = agents.load('experiment-1/state')
 print(run.agent.memory[0])
 ``` 
 

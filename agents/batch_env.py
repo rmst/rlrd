@@ -1,4 +1,3 @@
-
 import numpy as np
 import pickle
 import multiprocessing as mp
@@ -6,8 +5,8 @@ import time
 import torch
 from agents.util import partial
 
-
 USE_MP = False
+
 
 def get_env_state(env):
     dtypes = (int, np.ndarray, np.random.RandomState)
@@ -18,6 +17,7 @@ def get_env_state(env):
     elif hasattr(env, 'sim'):
         state.update(sim_state=env.sim.get_state())
     return state
+
 
 def set_env_state(env, state):
     if 'env' in state:
@@ -31,13 +31,14 @@ def _step(args):
     env, action = args
     return env.step(action)
 
+
 def _step_nd(args):
     envs, actions = args
     return list(map(_step, zip(envs, actions)))
 
+
 def _set_envs_from_pickle(envs):
     _envs = [pickle.loads(e) for e in envs]
-
 
 
 class BatchEnv:
@@ -78,7 +79,6 @@ class BatchEnv:
         return obss, rewards, dones, info
 
 
-
 if __name__ == '__main__':
 
     bs = 32
@@ -86,15 +86,18 @@ if __name__ == '__main__':
     num_steps = 20
 
     from agents.envs import GymEnv
+
     e = GymEnv(id='Ant-v2')
     e.reset()
 
     s = get_env_state(e)
-    e_pck = [pickle.dumps(s)] * bs # serialized envs
+    e_pck = [pickle.dumps(s)] * bs  # serialized envs
+
 
     # dummy policy
     def policy():
         return np.array([[e.action_space.sample() for _ in range(bs)] for _ in range(num_avg)])
+
 
     be = BatchEnv(partial(GymEnv, id='Ant-v2'), batch_size=bs, num_avg=num_avg)
 
@@ -113,6 +116,4 @@ if __name__ == '__main__':
         print('actions', actions.shape)
         be.step(actions)
 
-
     print(time.time() - t)
-
