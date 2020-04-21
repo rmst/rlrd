@@ -7,6 +7,8 @@ from gym.wrappers import TimeLimit
 from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class
 from agents.wrappers_rd import RandomDelayWrapper
 import numpy as np
+import pickle
+from agents.batch_env import get_env_state
 
 
 def mujoco_py_issue_424_workaround():
@@ -25,9 +27,10 @@ def mujoco_py_issue_424_workaround():
 class Env(gym.Wrapper):
 	"""Environment class wrapping gym.Env that automatically resets and stores the last transition"""
 
-	def __init__(self, env):
+	def __init__(self, env, store_env=False):
 		super().__init__(env)
 		self.transition = (self.reset(), 0., True, {})
+		self.store_env = store_env
 
 	def reset(self):
 		return self.observation(self.env.reset())
@@ -36,6 +39,10 @@ class Env(gym.Wrapper):
 		next_state, reward, done, info = self.env.step(action)
 		next_state = self.reset() if done else self.observation(next_state)
 		self.transition = next_state, reward, done, info
+
+		if self.store_env:
+			info['env_state'] = pickle.dumps(get_env_state(self))
+
 		return self.transition
 
 	def observation(self, observation):
@@ -43,7 +50,7 @@ class Env(gym.Wrapper):
 
 
 class GymEnv(Env):
-	def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0, obs_scale: float = 0.):
+	def __init__(self, seed_val=0, id: str = "Pendulum-v0", real_time: bool = False, frame_skip: int = 0, obs_scale: float = 0., store_env: bool = False)):
 		env = gym.make(id)
 
 		if obs_scale:
@@ -72,7 +79,7 @@ class GymEnv(Env):
 		else:
 			env = TupleObservationWrapper(env)
 
-		super().__init__(env)
+		super().__init__(env, store_env=store_env)
 
 
 # self.seed(seed_val)
