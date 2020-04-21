@@ -45,7 +45,7 @@ class MlpActionValue(Sequential):
 
 	# noinspection PyMethodOverriding
 	def forward(self, obs, action):
-		x = torch.cat((*obs, action), 1)
+		x = torch.cat((*obs, action), -1)
 		return super().forward(x)
 
 
@@ -59,7 +59,7 @@ class MlpPolicy(Sequential):
 
 	# noinspection PyMethodOverriding
 	def forward(self, obs):
-		return super().forward(torch.cat(obs, 1))
+		return super().forward(torch.cat(obs, -1)) # XXX
 
 
 class Mlp(ActorModule):
@@ -130,7 +130,8 @@ class ConvCritic(Module):
 		x = x.type(torch.float32)
 		x = x / 255 - 0.5
 		x = self.conv(x)
-		x = x.view(x.size(0), -1)
+		print(x.shape)
+		#x = x.view(x.size(0), -1)
 		x = leaky_relu(self.lin1(torch.cat((x, vec, *aux, a), -1)))
 		x = leaky_relu(self.lin2(torch.cat((x, vec, *aux, a), -1)))
 		x = self.output_layer(x)

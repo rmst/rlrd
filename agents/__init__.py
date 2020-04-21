@@ -18,6 +18,7 @@ from agents.training import Training
 import agents.rtac
 import agents.rrtac
 import agents.sac
+import agents.sac_nstep
 
 
 def iterate_episodes(run_cls: type = Training, checkpoint_path: str = None):
@@ -90,7 +91,7 @@ def run_fs(path: str, run_cls: type = Training):
 		dump(pd.DataFrame(), path + '/stats')
 	for stats in iterate_episodes(run_cls, path + '/state'):
 		dump(load(path + '/stats').append(stats, ignore_index=True),
-		     path + '/stats')  # concat with stats from previous episodes
+             path + '/stats')  # concat with stats from previous episodes
 
 
 # === specifications ===================================================================================================
@@ -110,6 +111,14 @@ SacTraining = partial(
 	Env=partial(id="Pendulum-v0"),
 	Test=partial(number=1, workers=1),
 )
+
+SacNstepTraining = partial(
+	Training,
+	Agent=partial(agents.sac_nstep.Agent),
+	Env=partial(id="Pendulum-v0", store_env=True),
+	#Test=partial(number=1, workers=1),
+)
+
 
 RtacTraining = partial(
 	SacTraining,

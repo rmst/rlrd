@@ -1,4 +1,5 @@
 from copy import deepcopy
+import pickle
 from dataclasses import dataclass
 
 import pandas as pd
@@ -11,6 +12,7 @@ from agents.testing import Test
 from agents.util import pandas_dict, cached_property
 from agents.wrappers import StatsWrapper
 from agents.envs import GymEnv
+from agents.batch_env import get_env_state
 
 
 @dataclass(eq=0)
@@ -27,10 +29,7 @@ class Training:
 
 	def __post_init__(self):
 		self.epoch = 0
-		with self.Env() as env:
-			# print("Environment:", self.env)
-			# noinspection PyArgumentList
-			self.agent = self.Agent(env.observation_space, env.action_space)
+		self.agent = self.Agent(self.Env)
 
 	def run_epoch(self):
 		stats = []
