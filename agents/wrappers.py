@@ -229,12 +229,12 @@ class RandomDelayWrapper(gym.Wrapper):
 
 		self.observation_space = Tuple((
 			env.observation_space,  # most recent observation
-			Tuple([env.action_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
+			Tuple([env.action_space] * (obs_delay_range.stop + act_delay_range.stop - 1)),  # action buffer
 			Discrete(obs_delay_range.stop),  # observation delay int64
 			Discrete(act_delay_range.stop),  # action delay int64
 		))
 
-		self.past_actions = deque(maxlen=obs_delay_range.stop + act_delay_range.stop)
+		self.past_actions = deque(maxlen=obs_delay_range.stop + act_delay_range.stop - 1)
 		self.past_observations = deque(maxlen=obs_delay_range.stop)
 		self.arrival_times_actions = deque(maxlen=act_delay_range.stop)
 		self.arrival_times_observations = deque(maxlen=obs_delay_range.stop)

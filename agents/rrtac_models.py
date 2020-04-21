@@ -78,8 +78,8 @@ class DoubleActorModule(StatefulActorModule):
 
 	def forward(self, state, x):
 		action_distribution, state_0, v0, h0 = self.a(state[0], x)
-		_, ms1, v1, h1 = self.b(state[1], x)
-		return action_distribution, (state_0, ms1), v0 + v1, h0 + h1  # note that the + here is not addition but tuple concatenation!
+		_, state_1, v1, h1 = self.b(state[1], x)
+		return action_distribution, (state_0, state_1), v0 + v1, h0 + h1  # note that the + here is not addition but tuple concatenation!
 
 
 class LstmDouble(DoubleActorModule):
