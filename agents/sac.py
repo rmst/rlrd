@@ -33,6 +33,7 @@ class Agent:
 	model_nograd = cached_property(lambda self: no_grad(copy_shared(self.model)))
 
 	total_updates = 0  # will be (len(self.memory)-start_training) * training_steps / training_interval
+	environment_steps = 0
 
 	def __post_init__(self, Env):
 		with Env() as env:
@@ -56,11 +57,14 @@ class Agent:
 
 		if train:
 			self.memory.append(np.float32(r), np.float32(done), info, obs, action)
-			total_updates_target = (len(self.memory) - self.start_training) * self.training_steps
-			for self.total_updates in range(self.total_updates + 1, int(total_updates_target) + 1):
-				if self.total_updates == 1:
+			self.environment_steps += 1
+
+			total_updates_target = (self.environment_steps - self.start_training) * self.training_steps
+			while self.total_updates < int(total_updates_target):
+				if self.total_updates == 0:
 					print("starting training")
 				stats += self.train(),
+				self.total_updates += 1
 		return action, next_state, stats
 
 	def train(self):
@@ -143,7 +147,7 @@ def test_agent():
 		epochs=3,
 		rounds=5,
 		steps=100,
-		Agent=partial(Agent, memory_size=1000000, start_training=256, batchsize=4),
+		Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4),
 		Env=partial(id="Pendulum-v0", real_time=0),
 	)
 	run(Sac_Test)
