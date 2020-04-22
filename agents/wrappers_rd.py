@@ -20,7 +20,7 @@ class RandomDelayWrapper(gym.Wrapper):
         initial_action: action (default None): action with which the action buffer is filled at reset() (if None, sampled in the action space)
     """
 
-    def __init__(self, env, obs_delay_range=range(0, 8), act_delay_range=range(0, 2), instant_rewards: bool = True, initial_action=None):
+    def __init__(self, env, obs_delay_range=range(0, 8), act_delay_range=range(0, 2), instant_rewards: bool = True, initial_action=None, skip_initial_actions=False):
         super().__init__(env)
         self.instant_rewards = instant_rewards
         self.obs_delay_range = obs_delay_range
@@ -34,9 +34,10 @@ class RandomDelayWrapper(gym.Wrapper):
         ))
 
         self.initial_action = initial_action
+        self.skip_initial_actions = skip_initial_actions
         self.past_actions = deque(maxlen=obs_delay_range.stop + act_delay_range.stop)
         self.past_observations = deque(maxlen=obs_delay_range.stop)
-        self.arrival_times_actions = deque(maxlen=act_delay_range.stop)
+        self.arrival_times_actions = deque(maxlen=obs_delay_range.stop + act_delay_range.stop)
         self.arrival_times_observations = deque(maxlen=obs_delay_range.stop)
 
         self.t = 0
@@ -48,12 +49,13 @@ class RandomDelayWrapper(gym.Wrapper):
         first_observation = super().reset(**kwargs)
 
         # fill up buffers
-        self.t = - (self.obs_delay_range.stop + self.act_delay_range.stop)
+        self.t = - (self.obs_delay_range.stop + self.act_delay_range.stop)  # this is <= -2
         while self.t < 0:
             act = self.action_space.sample() if self.initial_action is None else self.initial_action
             self.send_action(act)
             self.send_observation((first_observation, 0., False, {}, 0))
             self.t += 1
+        self.receive_action()  # an action has to be applied
 
         assert self.t == 0
         received_observation, *_ = self.receive_observation()
@@ -76,7 +78,7 @@ class RandomDelayWrapper(gym.Wrapper):
         self.send_action(action)
 
         # at the remote actor
-        if self.t < self.act_delay_range.stop:
+        if self.t < self.act_delay_range.stop and self.skip_initial_actions:
             # do nothing until the brain's first actions arrive at the remote actor
             self.receive_action()
             aux = 0, False, {}
@@ -104,7 +106,7 @@ class RandomDelayWrapper(gym.Wrapper):
 
     def send_action(self, action):
         """
-        Appends action on the left of self.past_actions
+        Appends action to the left of self.past_actions
         Simulates the time at which it will reach the agent and stores it on the left of self.arrival_times_actions
         """
         # at the brain
@@ -125,7 +127,7 @@ class RandomDelayWrapper(gym.Wrapper):
 
     def send_observation(self, obs):
         """
-        Appends obs on the left of self.past_observations
+        Appends obs to the left of self.past_observations
         Simulates the time at which it will reach the brain and appends it in self.arrival_times_observations
         """
         # at the remote actor
