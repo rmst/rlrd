@@ -37,7 +37,7 @@ class RandomDelayWrapper(gym.Wrapper):
         self.skip_initial_actions = skip_initial_actions
         self.past_actions = deque(maxlen=obs_delay_range.stop + act_delay_range.stop)
         self.past_observations = deque(maxlen=obs_delay_range.stop)
-        self.arrival_times_actions = deque(maxlen=obs_delay_range.stop + act_delay_range.stop)
+        self.arrival_times_actions = deque(maxlen=act_delay_range.stop)
         self.arrival_times_observations = deque(maxlen=obs_delay_range.stop)
 
         self.t = 0
