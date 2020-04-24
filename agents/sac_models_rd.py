@@ -10,7 +10,7 @@ from agents.envs import RandomDelayEnv
 
 
 class DelayedBranchedMlpModule(Module):
-    def __init__(self, observation_space, action_space, device, is_Q_network, hidden_units: int = 256):
+    def __init__(self, observation_space, action_space, is_Q_network, hidden_units: int = 256):
         super().__init__()
         assert isinstance(observation_space, gym.spaces.Tuple)
         # TODO: check that it is actually an instance of:
@@ -21,7 +21,6 @@ class DelayedBranchedMlpModule(Module):
         # 	Discrete(act_delay_range.stop),  # action delay int64
         # ))
 
-        self.device = device
         self.is_Q_network = is_Q_network
 
         self.obs_dim = observation_space[0].shape[0]
@@ -48,12 +47,6 @@ class DelayedBranchedMlpModule(Module):
 
         # TODO: double check that everything is correct (dims, devices, autograd)
 
-        # print(f"DEBUG: forward --------------------------")
-        # print(f"DEBUG: is_Q_network:{self.is_Q_network}")
-        # print(f"DEBUG:x[0].shape:{x[0].shape}")
-        # print(f"DEBUG: len(x[1]):{len(x[1])}")
-        # print(f"DEBUG:x[2]:{x[2]}")
-        # print(f"DEBUG:x[3]:{x[3]}")
         obs = x[0]
         act_buf = torch.cat(x[1], dim=1)
         obs_del = x[2]
@@ -62,44 +55,27 @@ class DelayedBranchedMlpModule(Module):
             act = x[4]  # TODO: check that this is correct
 
         batch_size = obs.shape[0]
-        obs_one_hot = torch.zeros(batch_size, self.buf_size, device=self.device).scatter_(1, obs_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
-        act_one_hot = torch.zeros(batch_size, self.buf_size, device=self.device).scatter_(1, act_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
-
-        # print(f"DEBUG:obs:{obs}")
-        # print(f"DEBUG:act_buf:{act_buf}")
-        # print(f"DEBUG:obs_del:{obs_del}")
-        # print(f"DEBUG:act_del:{act_del}")
-        # print(f"DEBUG:obs_one_hot:{obs_one_hot}")
-        # print(f"DEBUG:act_one_hot:{act_one_hot}")
+        obs_one_hot = torch.zeros(batch_size, self.buf_size, device=obs.device).scatter_(1, obs_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
+        act_one_hot = torch.zeros(batch_size, self.buf_size, device=obs.device).scatter_(1, act_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
 
         input_obs = torch.cat((obs, obs_one_hot), dim=1)
         input_act = torch.cat((act_buf, act_one_hot), dim=1)
 
-        # print(f"DEBUG:input_obs.shape:{input_obs.shape}")
-        # print(f"DEBUG:input_act.shape:{input_act.shape}")
-
         h_obs = F.relu(self.lin_obs(input_obs))
         h_act = F.relu(self.lin_act(input_act))
-
-        # print(f"DEBUG:h_obs.shape:{h_obs.shape}")
-        # print(f"DEBUG:h_act.shape:{h_act.shape}")
 
         if self.is_Q_network:
             h = torch.cat((h_obs, h_act, act), dim=1)
         else:
             h = torch.cat((h_obs, h_act), dim=1)
 
-        # print(f"DEBUG:after merge h.shape:{h.shape}")
-
         h = self.lin_merged(h)
-
-        # print(f"DEBUG:output subnet h.shape:{h.shape}")
 
         return h
 
 
 class DelayedMlpModule(Module):
-    def __init__(self, observation_space, action_space, device, is_Q_network, hidden_units: int = 256, obs_delay=True, act_delay=True):  # FIXME: action_space param is useless
+    def __init__(self, observation_space, action_space, is_Q_network, hidden_units: int = 256, obs_delay=True, act_delay=True):  # FIXME: action_space param is useless
         """
         Args:
             observation_space:
@@ -110,7 +86,6 @@ class DelayedMlpModule(Module):
                     Discrete(act_delay_range.stop),  # action delay int64
                 ))
             action_space
-            device: the device on which the variables are instanciated
             is_Q_network: bool: if True, the input of forward() expects the action to be appended at the end of the input
             hidden_units: number of output units of this module
             (optional) obs_delay: bool (default True): if False, the observation delay of observation_space will be ignored (e.g. unknown)
@@ -126,7 +101,6 @@ class DelayedMlpModule(Module):
         # 	Discrete(act_delay_range.stop),  # action delay int64
         # ))
 
-        self.device = device
         self.is_Q_network = is_Q_network
         self.act_delay = act_delay
         self.obs_delay = obs_delay
@@ -162,13 +136,7 @@ class DelayedMlpModule(Module):
         # ))
 
         # TODO: double check that everything is correct (dims, devices, autograd)
-
-        # print(f"DEBUG: forward --------------------------")
-        # print(f"DEBUG: is_Q_network:{self.is_Q_network}")
-        # print(f"DEBUG:x[0].shape:{x[0].shape}")
-        # print(f"DEBUG: len(x[1]):{len(x[1])}")
-        # print(f"DEBUG:x[2]:{x[2]}")
-        # print(f"DEBUG:x[3]:{x[3]}")
+        # TODO: triple check devices...
 
         obs = x[0]
         act_buf = torch.cat(x[1], dim=1)
@@ -178,14 +146,14 @@ class DelayedMlpModule(Module):
         batch_size = obs.shape[0]
         if self.obs_delay:
             obs_del = x[2]
-            obs_one_hot = torch.zeros(batch_size, self.buf_size, device=self.device).scatter_(1, obs_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
+            obs_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, obs_del.unsqueeze(1), 1.0)
             input = torch.cat((input, obs_one_hot), dim=1)
         if self.act_delay:
             act_del = x[3]
-            act_one_hot = torch.zeros(batch_size, self.buf_size, device=self.device).scatter_(1, act_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
+            act_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, act_del.unsqueeze(1), 1.0)
             input = torch.cat((input, act_one_hot), dim=1)
         if self.is_Q_network:
-            act = x[4]  # TODO: check that this is correct
+            act = x[4]
             input = torch.cat((input, act), dim=1)
 
         h = self.lin(input)
@@ -194,9 +162,9 @@ class DelayedMlpModule(Module):
 
 
 class MlpActionValue(Sequential):
-    def __init__(self, observation_space, action_space, hidden_units, device, act_delay=True, obs_delay=True):
+    def __init__(self, observation_space, action_space, hidden_units, act_delay=True, obs_delay=True):
         super().__init__(
-            DelayedMlpModule(observation_space, action_space, device, is_Q_network=True, act_delay=act_delay, obs_delay=obs_delay), ReLU(),
+            DelayedMlpModule(observation_space, action_space, is_Q_network=True, act_delay=act_delay, obs_delay=obs_delay), ReLU(),
             Linear(hidden_units, hidden_units), ReLU(),
             Linear(hidden_units, 2)  # reward and entropy predicted separately
         )
@@ -208,9 +176,9 @@ class MlpActionValue(Sequential):
 
 
 class MlpPolicy(Sequential):
-    def __init__(self, observation_space, action_space, hidden_units, device, act_delay=True, obs_delay=True):
+    def __init__(self, observation_space, action_space, hidden_units, act_delay=True, obs_delay=True):
         super().__init__(
-            DelayedMlpModule(observation_space, action_space, device, is_Q_network=False, act_delay=act_delay, obs_delay=obs_delay), ReLU(),
+            DelayedMlpModule(observation_space, action_space, is_Q_network=False, act_delay=act_delay, obs_delay=obs_delay), ReLU(),
             Linear(hidden_units, hidden_units), ReLU(),
             TanhNormalLayer(hidden_units, action_space.shape[0])
         )
@@ -224,8 +192,8 @@ class Mlp(ActorModule):
     def __init__(self, observation_space, action_space, hidden_units: int = 256, num_critics: int = 2, act_delay=False, obs_delay=False):
         super().__init__()
         assert isinstance(observation_space, gym.spaces.Tuple)
-        self.critics = ModuleList(MlpActionValue(observation_space, action_space, hidden_units, self.device, act_delay=act_delay, obs_delay=obs_delay) for _ in range(num_critics))
-        self.actor = MlpPolicy(observation_space, action_space, hidden_units, self.device, act_delay=act_delay, obs_delay=obs_delay)
+        self.critics = ModuleList(MlpActionValue(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay) for _ in range(num_critics))
+        self.actor = MlpPolicy(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay)
         self.critic_output_layers = [c[-1] for c in self.critics]
 
 
@@ -236,25 +204,43 @@ if __name__ == "__main__":
     from agents.util import partial
     from agents.sac import Agent
 
-    Delayed_Sac_Test = partial(
+    Delayed_Sac_Test1 = partial(
         Training,
-        epochs=3,
-        rounds=5,
-        steps=500,
-        Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4, Model=Mlp),
+        epochs=2,
+        rounds=10,
+        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=False, obs_delay=False)),
         Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=1, min_action_delay=0, sup_action_delay=1),  # RTRL setting, should get roughly the same behavior as SAC in RTRL
+    )
+
+    Delayed_Sac_Test2 = partial(
+        Training,
+        epochs=2,
+        rounds=10,
+        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=False, obs_delay=False)),  # random delay information in obs ignored by model
+        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=8, min_action_delay=0, sup_action_delay=2),  # random delays
+    )
+
+    Delayed_Sac_Test3 = partial(
+        Training,
+        epochs=2,
+        rounds=10,
+        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=True, obs_delay=True)),  # random delay information in obs taken into account by model
+        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=8, min_action_delay=0, sup_action_delay=2),  # random delays
     )
 
     Sac_Test = partial(
         Training,
-        epochs=3,
-        rounds=5,
-        steps=500,
-        Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4),
+        epochs=2,
+        rounds=10,
+        Agent=partial(Agent, device='cuda'),
         Env=partial(id="Pendulum-v0", real_time=True),
     )
 
-    print("--- NOW RUNNING: SAC, delayed wrapper, delayed MLP model, RTRL setting ---")
-    run(Delayed_Sac_Test)
     print("--- NOW RUNNING: SAC, normal env, normal MLP model, RTRL setting ---")
     run(Sac_Test)
+    print("--- NOW RUNNING: SAC, delayed wrapper, delayed MLP model, RTRL setting ---")
+    run(Delayed_Sac_Test1)
+    print("--- NOW RUNNING: SAC, delayed wrapper, delayed MLP model, random delays setting, ignoring delays in observations ---")
+    run(Delayed_Sac_Test2)
+    print("--- NOW RUNNING: SAC, delayed wrapper, delayed MLP model, random delays setting, taking delays into account in observations ---")
+    run(Delayed_Sac_Test3)
