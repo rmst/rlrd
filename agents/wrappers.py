@@ -1,5 +1,6 @@
-from collections import Sequence, Mapping, deque
+from collections import deque
 from random import randint, randrange, sample
+from typing import Sequence, Mapping
 
 import gym
 import numpy as np

@@ -145,6 +145,7 @@ def test_avenue():
     env.reset()
     [env.step(env.action_space.sample()) for _ in range(1000)]
     (img,), _, _, _ = env.step(env.action_space.sample())
+    assert img == 3
     print('done')
 
 
