@@ -189,7 +189,7 @@ class MlpPolicy(Sequential):
 
 
 class Mlp(ActorModule):
-    def __init__(self, observation_space, action_space, hidden_units: int = 256, num_critics: int = 2, act_delay=False, obs_delay=False):
+    def __init__(self, observation_space, action_space, hidden_units: int = 256, num_critics: int = 2, act_delay: bool = True, obs_delay: bool = True):
         super().__init__()
         assert isinstance(observation_space, gym.spaces.Tuple)
         self.critics = ModuleList(MlpActionValue(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay) for _ in range(num_critics))
