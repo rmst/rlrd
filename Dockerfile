@@ -153,18 +153,18 @@ RUN --mount=type=ssh git clone git@github.com:elementai/avenue.git avenue \
   && pip --no-cache-dir install -e .
 
 # download Avenue assets
-#RUN mkdir /app/avenue_assets
-#ENV AVENUE_ASSETS /app/avenue_assets
+#RUN mkdir avenue_assets
+#ENV AVENUE_ASSETS avenue_assets
 #RUN python -c 'import avenue; avenue.download("AvenueCar")'
-#RUN chmod 777 -R /app/avenue_assets
+#RUN chmod 777 -R avenue_assets
 
 
 
 FROM ${GYM_BASE}
 
-COPY . /app/agents
+COPY . agents
 
-RUN pip --no-cache-dir install -e /app/agents
+RUN pip --no-cache-dir install -e agents
 
 # optional wandb installation (we do this last because old versions break quickly so we don't want them to get cached)
 RUN pip --no-cache-dir install wandb
