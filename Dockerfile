@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.0.0-experimental
 # (experimental ssh forwarding: https://medium.com/@tonistiigi/build-secrets-and-ssh-forwarding-in-docker-18-09-ae8161d066)
 
-# Build with DOCKER_BUILDKIT=1 docker build ... !
+# Build with DOCKER_BUILDKIT=1 docker build .
 
 
 # Cuda image. Can by any image with CUDA. If "base-x11" we will build with X11 support.
@@ -9,6 +9,7 @@ ARG CUDA_BASE="nvidia/cuda:9.0-cudnn7-runtime-ubuntu16.04"
 
 # OpenAI-Gym image. Can by any image with Pytorch, Gym, etc. Special values: gym, gym-mujoco, gym-avenue
 ARG GYM_BASE="gym"
+
 
 
 FROM nvidia/opengl:1.0-glvnd-devel-ubuntu18.04 as base-x11
