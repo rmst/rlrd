@@ -74,7 +74,7 @@ DOCKER_BUILDKIT=1 docker build . --build-arg GYM_BASE="gym-mujoco" --build-arg M
 ```
 To create an image with Avenue run
 ```
-DOCKER_BUILDKIT=1 docker build . --build-arg GYM_BASE="gym-avenue" --ssh="default=$HOME/.ssh/id_rsa"
+DOCKER_BUILDKIT=1 docker build . --build-arg CUDA_BASE="cuda-x11" --build-arg GYM_BASE="gym-avenue"
 ```
 However, to get GPU rendering going there are additional steps that have to be taken.
 

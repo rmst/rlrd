@@ -12,7 +12,7 @@ ARG GYM_BASE="gym"
 
 
 
-FROM nvidia/opengl:1.0-glvnd-devel-ubuntu18.04 as base-x11
+FROM nvidia/opengl:1.0-glvnd-devel-ubuntu18.04 as cuda-x11
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y \
