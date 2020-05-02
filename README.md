@@ -63,6 +63,21 @@ print(run.agent.memory[0])
 ``` 
 
 
+### Docker
+There is a single Dockerfile that can be used to build images for all experiments. To create a basic image (without Mujoco or Avenue) in the root directory run
+```
+DOCKER_BUILDKIT=1 docker build .
+```
+To create an image with Mujoco run
+```
+DOCKER_BUILDKIT=1 docker build . --build-arg GYM_BASE="gym-mujoco" --build-arg MJ_KEY="$(cat $MJKEY_FILE)"
+```
+To create an image with Avenue run
+```
+DOCKER_BUILDKIT=1 docker build . --build-arg GYM_BASE="gym-avenue" --ssh="default=$HOME/.ssh/id_rsa"
+```
+However, to get GPU rendering going there are additional steps that have to be taken.
+
 ### Contributing
 Currently, the PEP8 style guide is followed with the exception that we use tabs rather than spaces and line lengths are not limited.
 

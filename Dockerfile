@@ -132,8 +132,6 @@ os.chmod(p, 0o777) \n" | python
 
 FROM gym as gym-avenue
 
-ENV GIT_SSH_COMMAND 'ssh -o "StrictHostKeyChecking no"'
-
 # download Avenue assets
 ENV AVENUE_ASSETS $PWD/avenue_assets
 RUN mkdir avenue_assets \
@@ -147,8 +145,8 @@ RUN mkdir avenue_assets \
 #  && rm avenue.zip \
 #  && chmod 777 -R avenue_assets
 
-ARG AVENUE_REV
-RUN --mount=type=ssh git clone git@github.com:elementai/avenue.git avenue \
+ARG AVENUE_REV=master
+RUN git clone https://github.com/elementai/avenue avenue \
   && cd avenue \
   && git reset --hard ${AVENUE_REV?} \
   && pip --no-cache-dir install -e .
