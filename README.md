@@ -1,4 +1,4 @@
-# Agent
+# Agents
 
 Reinforcement Learning Agents in Pytorch
 

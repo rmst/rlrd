@@ -161,10 +161,14 @@ RUN git clone https://github.com/elementai/avenue avenue \
 
 FROM ${GYM_BASE}
 
+# installing dependencies first to allow them to be cached
+COPY setup.py ./
+RUN python setup.py egg_info && pip install -r *.egg-info/requires.txt && rm -r setup.py *.egg-info
+
 COPY . agents
 
 RUN pip --no-cache-dir install -e agents
 
 # optional wandb installation (we do this last because old versions break quickly so we don't want them to get cached)
-RUN pip --no-cache-dir install wandb
+RUN pip --no-cache-dir install wandb --upgrade
 
