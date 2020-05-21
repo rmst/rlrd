@@ -126,7 +126,7 @@ class DelayedMlpModule(Module):
                 self.lin = Linear(self.obs_dim + self.act_dim * self.buf_size, hidden_units)
 
     def forward(self, x):
-        assert isinstance(x, tuple)
+        assert isinstance(x, tuple), f"x is not a tuple: {x}"
         # TODO: check that x is actually in:
         # Tuple((
         # 	obs_space,  # most recent observation
@@ -236,8 +236,8 @@ if __name__ == "__main__":
         Env=partial(id="Pendulum-v0", real_time=True),
     )
 
-    print("--- NOW RUNNING: SAC, normal env, normal MLP model, RTRL setting ---")
-    run(Sac_Test)
+    # print("--- NOW RUNNING: SAC, normal env, normal MLP model, RTRL setting ---")
+    # run(Sac_Test)
     print("--- NOW RUNNING: SAC, delayed wrapper, delayed MLP model, RTRL setting ---")
     run(Delayed_Sac_Test1)
     print("--- NOW RUNNING: SAC, delayed wrapper, delayed MLP model, random delays setting, ignoring delays in observations ---")

@@ -8,12 +8,13 @@ import torch
 from torch.nn.functional import mse_loss
 
 import agents.sac
-from agents.memory import Memory
+from agents.memory import TrajMemoryNoHidden
 from agents.nn import no_grad, exponential_moving_average
 from agents.util import partial
 
-from agents.drtac_models import DelayedBranchedMlpDouble
+from agents.sac_models_rd import Mlp
 from agents.envs import RandomDelayEnv
+from collections import deque
 
 
 @dataclass(eq=0)
@@ -24,6 +25,11 @@ class Agent(agents.sac.Agent):
     def __post_init__(self, Env):
         with Env() as env:
             observation_space, action_space = env.observation_space, env.action_space
+            self.max_obs_delay = env.obs_delay_range.stop
+            self.max_act_delay = env.act_delay_range.stop
+            print(f"DEBUG: self.max_obs_delay: {self.max_obs_delay}")
+            print(f"DEBUG: self.max_act_delay: {self.max_act_delay}")
+            self.act_buf_size = self.max_obs_delay + self.max_act_delay
         device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
         model = self.Model(observation_space, action_space)
         self.model = model.to(device)
@@ -33,16 +39,52 @@ class Agent(agents.sac.Agent):
         self.outputnorm_target = self.OutputNorm(self.model_target.critic_output_layers)
 
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-        self.memory = Memory(self.memory_size, self.batchsize, device)
+        self.memory = TrajMemoryNoHidden(self.memory_size, self.batchsize, device, history=self.max_obs_delay + self.max_act_delay)
+        self.traj_new_actions = [None, ] * self.act_buf_size
+        self.traj_new_actions_log_prob = [None, ] * self.act_buf_size
 
         self.is_training = False
 
     def train(self):
-        obs, actions, rewards, next_obs, terminals = self.memory.sample()
+        # sample a trajectory of length self.act_buf_size
+        augm_obs_traj, act_traj, rew_traj, terminals = self.memory.sample()
 
-        new_action_distribution, _, hidden = self.model(obs)
-        new_actions = new_action_distribution.rsample()
-        new_actions_log_prob = new_action_distribution.log_prob(new_actions)
+        batch_size = terminals.shape[0]
+        int_tens_type = obs_del = augm_obs_traj[0][2].dtype
+        next_del = torch.ones(batch_size, device=self.device, dtype=int_tens_type) * self.max_obs_delay
+
+        # use the current policy to compute a new trajectory of actions of length self.act_buf_size
+        for i in range(self.act_buf_size):
+            # find the delay of the first action to determine the length of the backup:
+            obs_del = augm_obs_traj[i][2]
+            act_del = augm_obs_traj[i][3]
+            tot_del = obs_del + act_del
+            print(f"DEBUG: i: {i}")
+            print(f"DEBUG: obs_del: {obs_del}")
+            print(f"DEBUG: act_del: {act_del}")
+            print(f"DEBUG: tot_del: {tot_del}")
+            print(f"DEBUG: next_del before: {next_del}")
+            next_del = torch.where((tot_del == i) & (tot_del < next_del), tot_del, next_del)  # FIXME: check that this works as expected
+            print(f"DEBUG: next_del after: {next_del}")
+
+            # compute a new action and update the corresponding augmented observation:
+            augm_obs = augm_obs_traj[i]
+            print(f"DEBUG: augm_obs before: {augm_obs}")
+            if i > 0:
+                # FIXME: check that this won't mess with autograd
+                act_slice = tuple(self.traj_new_actions[self.act_buf_size - i:self.act_buf_size])  # FIXME: check that first action in the action buffer is indeed the last computed action
+                augm_obs = augm_obs[:1] + ((act_slice + augm_obs[1][i:]), ) + augm_obs[2:]
+                print(f"DEBUG: augm_obs after: {augm_obs}")
+            new_action_distribution = self.model.actor(augm_obs)
+            # this is stored in right -> left order for replacing correctly in augm_obs:
+            self.traj_new_actions[self.act_buf_size - i - 1] = new_action_distribution.rsample()
+            # this is stored in right -> left order for consistency:
+            self.traj_new_actions_log_prob[self.act_buf_size - i - 1] = new_action_distribution.log_prob(self.traj_new_actions[self.act_buf_size - i - 1])
+
+        print(f"DEBUG: self.traj_new_actions: {self.traj_new_actions}")
+        print(f"DEBUG: self.traj_new_actions_log_prob: {self.traj_new_actions_log_prob}")
+
+        assert False
 
         # critic loss
         _, next_value_target, _ = self.model_target((next_obs[0], new_actions.detach()))
@@ -96,15 +138,15 @@ class Agent(agents.sac.Agent):
 if __name__ == "__main__":
     from agents import Training, run
 
-    RtacTest = partial(
+    DacTest = partial(
         Training,
         epochs=3,
         rounds=5,
         steps=500,
-        Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4, Model=DelayedBranchedMlpDouble),
+        Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4, Model=Mlp),
         Env=RandomDelayEnv,
         # Env=partial(id="HalfCheetah-v2", real_time=True),
     )
 
-    run(RtacTest)
+    run(DacTest)
 # run(Rtac_Avenue_Test)

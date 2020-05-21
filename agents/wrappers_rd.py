@@ -20,7 +20,7 @@ class RandomDelayWrapper(gym.Wrapper):
         initial_action: action (default None): action with which the action buffer is filled at reset() (if None, sampled in the action space)
     """
 
-    def __init__(self, env, obs_delay_range=range(0, 8), act_delay_range=range(0, 2), instant_rewards: bool = True, initial_action=None, skip_initial_actions=False):
+    def __init__(self, env, obs_delay_range=range(0, 8), act_delay_range=range(0, 2), instant_rewards: bool = True, initial_action=None, skip_initial_actions=True):
         super().__init__(env)
         self.instant_rewards = instant_rewards
         self.obs_delay_range = obs_delay_range
