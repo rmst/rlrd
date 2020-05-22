@@ -115,8 +115,8 @@ class RandomDelayEnv(Env):
                  frame_skip: int = 0,
                  min_observation_delay: int = 0,
                  sup_observation_delay: int = 8,
-                 min_action_delay: int = 0,
-                 sup_action_delay: int = 2):
+                 min_action_delay: int = 0,  # this is equivalent to a MIN of 1 in the paper
+                 sup_action_delay: int = 2):  # this is equivalent to a MAX of 2 in the paper
         env = gym.make(id)
 
         if frame_skip:

@@ -96,7 +96,7 @@ class DelayedMlpModule(Module):
         # TODO: check that it is actually an instance of:
         # Tuple((
         # 	obs_space,  # most recent observation
-        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
+        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop - 1)),  # action buffer
         # 	Discrete(obs_delay_range.stop),  # observation delay int64
         # 	Discrete(act_delay_range.stop),  # action delay int64
         # ))
@@ -107,6 +107,7 @@ class DelayedMlpModule(Module):
 
         self.obs_dim = observation_space[0].shape[0]
         self.buf_size = len(observation_space[1])
+        print(f"DEBUG: MLP self.buf_size: {self.buf_size}")
         self.act_dim = observation_space[1][0].shape[0]
         assert self.act_dim == action_space.shape[0], f"action spaces mismatch: {self.act_dim} and {action_space.shape[0]}"
 
