@@ -46,7 +46,10 @@ class Agent(agents.sac.Agent):
         self.is_training = False
 
     def train(self):
+        # TODO: remove requires_grad everywhere it should not be
+
         # sample a trajectory of length self.act_buf_size
+        # NB: when terminals is True, the terminal (delayed) augmented state is the last one of the trajectory
         augm_obs_traj, act_traj, rew_traj, terminals = self.memory.sample()
 
         batch_size = terminals.shape[0]
@@ -106,7 +109,7 @@ class Agent(agents.sac.Agent):
         # (caution: this can be a different position in the trajectory for each element of the batch).
 
         # We expect each augmented state to be of shape (obs:tensor, act_buf:(tensor, ..., tensor), obs_del:tensor, act_del:tensor). Each tensor is batched.
-        # We want to execute only 1 forward pass in the state-value estimator, therefore we recreate a batched augmented state for this specific purpose.
+        # We want to execute only 1 forward pass in the state-value estimator, therefore we recreate an artificially batched augmented state for this specific purpose.
 
         print(f"DEBUG: nstep_len: {nstep_len}")
         obs_s = torch.stack([self.traj_new_augm_obs[i + 1][0][ibatch] for ibatch, i in enumerate(nstep_len)])
@@ -120,22 +123,28 @@ class Agent(agents.sac.Agent):
 
         mod_val = [c(mod_augm_obs) for c in self.model_target.critics]
         mod_val = reduce(torch.min, torch.stack(mod_val)).squeeze()
-        print(f"DEBUG: mod_val: {mod_val}")
+        print(f"DEBUG: mod_val before removing terminal states: {mod_val}")
+        mod_val = mod_val * (1. - terminals)
+        print(f"DEBUG: mod_val after removing terminal states: {mod_val}")
 
         # Now let us use this to compute the state-value targets of the batch of initial augmented states:
         val = torch.zeros(batch_size)
         backup_started = torch.zeros(batch_size)
         print(f"DEBUG: self.discount: {self.discount}")
+        print(f"DEBUG: self.reward_scale: {self.reward_scale}")
+        print(f"DEBUG: self.entropy_scale: {self.entropy_scale}")
+        print(f"DEBUG: terminals: {terminals}")
         for i in reversed(range(nstep_max_len + 1)):
             start_backup_mask = nstep_one_hot[:, i]
             backup_started += start_backup_mask
             print(f"DEBUG: i: {i}")
             print(f"DEBUG: start_backup_mask: {start_backup_mask}")
             print(f"DEBUG: backup_started: {backup_started}")
-            val = rew_traj[i] + backup_started * self.discount * (val + start_backup_mask * mod_val)
+            val = self.reward_scale * rew_traj[i] - self.entropy_scale * self.traj_new_actions_log_prob[i] + backup_started * self.discount * (val + start_backup_mask * mod_val)
             print(f"DEBUG: rew_traj[i]: {rew_traj[i]}")
+            print(f"DEBUG: self.traj_new_actions_log_prob[i]: {self.traj_new_actions_log_prob[i]}")
             print(f"DEBUG: new val: {val}")
-
+        print(f"DEBUG: state-value target: {val}")
 
         assert False
 
