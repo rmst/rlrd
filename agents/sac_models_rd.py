@@ -9,69 +9,69 @@ from agents.nn import TanhNormalLayer
 from agents.envs import RandomDelayEnv
 
 
-class DelayedBranchedMlpModule(Module):
-    def __init__(self, observation_space, action_space, is_Q_network, hidden_units: int = 256):
-        super().__init__()
-        assert isinstance(observation_space, gym.spaces.Tuple)
-        # TODO: check that it is actually an instance of:
-        # Tuple((
-        # 	obs_space,  # most recent observation
-        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
-        # 	Discrete(obs_delay_range.stop),  # observation delay int64
-        # 	Discrete(act_delay_range.stop),  # action delay int64
-        # ))
-
-        self.is_Q_network = is_Q_network
-
-        self.obs_dim = observation_space[0].shape[0]
-        self.buf_size = len(observation_space[1])
-        self.act_dim = observation_space[1][0].shape[0]
-
-        self.lin_obs = Linear(self.obs_dim + self.buf_size, hidden_units)  # TODO: find a better solution
-        self.lin_act = Linear(self.act_dim * self.buf_size + self.buf_size, hidden_units)  # TODO: find a better solution
-
-        if self.is_Q_network:
-            self.lin_merged = Linear(2 * hidden_units + action_space.shape[0], hidden_units)
-        else:
-            self.lin_merged = Linear(2 * hidden_units, hidden_units)
-
-    def forward(self, x):
-        assert isinstance(x, tuple)
-        # TODO: check that x is actually in:
-        # Tuple((
-        # 	obs_space,  # most recent observation
-        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
-        # 	Discrete(obs_delay_range.stop),  # observation delay int64
-        # 	Discrete(act_delay_range.stop),  # action delay int64
-        # ))
-
-        # TODO: double check that everything is correct (dims, devices, autograd)
-
-        obs = x[0]
-        act_buf = torch.cat(x[1], dim=1)
-        obs_del = x[2]
-        act_del = x[3]
-        if self.is_Q_network:
-            act = x[4]  # TODO: check that this is correct
-
-        batch_size = obs.shape[0]
-        obs_one_hot = torch.zeros(batch_size, self.buf_size, device=obs.device).scatter_(1, obs_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
-        act_one_hot = torch.zeros(batch_size, self.buf_size, device=obs.device).scatter_(1, act_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
-
-        input_obs = torch.cat((obs, obs_one_hot), dim=1)
-        input_act = torch.cat((act_buf, act_one_hot), dim=1)
-
-        h_obs = F.relu(self.lin_obs(input_obs))
-        h_act = F.relu(self.lin_act(input_act))
-
-        if self.is_Q_network:
-            h = torch.cat((h_obs, h_act, act), dim=1)
-        else:
-            h = torch.cat((h_obs, h_act), dim=1)
-
-        h = self.lin_merged(h)
-
-        return h
+# class DelayedBranchedMlpModule(Module):
+#     def __init__(self, observation_space, action_space, is_Q_network, hidden_units: int = 256):
+#         super().__init__()
+#         assert isinstance(observation_space, gym.spaces.Tuple)
+#         # TODO: check that it is actually an instance of:
+#         # Tuple((
+#         # 	obs_space,  # most recent observation
+#         # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
+#         # 	Discrete(obs_delay_range.stop),  # observation delay int64
+#         # 	Discrete(act_delay_range.stop),  # action delay int64
+#         # ))
+#
+#         self.is_Q_network = is_Q_network
+#
+#         self.obs_dim = observation_space[0].shape[0]
+#         self.buf_size = len(observation_space[1])
+#         self.act_dim = observation_space[1][0].shape[0]
+#
+#         self.lin_obs = Linear(self.obs_dim + self.buf_size, hidden_units)  # TODO: find a better solution
+#         self.lin_act = Linear(self.act_dim * self.buf_size + self.buf_size, hidden_units)  # TODO: find a better solution
+#
+#         if self.is_Q_network:
+#             self.lin_merged = Linear(2 * hidden_units + action_space.shape[0], hidden_units)
+#         else:
+#             self.lin_merged = Linear(2 * hidden_units, hidden_units)
+#
+#     def forward(self, x):
+#         assert isinstance(x, tuple)
+#         # TODO: check that x is actually in:
+#         # Tuple((
+#         # 	obs_space,  # most recent observation
+#         # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
+#         # 	Discrete(obs_delay_range.stop),  # observation delay int64
+#         # 	Discrete(act_delay_range.stop),  # action delay int64
+#         # ))
+#
+#         # TODO: double check that everything is correct (dims, devices, autograd)
+#
+#         obs = x[0]
+#         act_buf = torch.cat(x[1], dim=1)
+#         obs_del = x[2]
+#         act_del = x[3]
+#         if self.is_Q_network:
+#             act = x[4]  # TODO: check that this is correct
+#
+#         batch_size = obs.shape[0]
+#         obs_one_hot = torch.zeros(batch_size, self.buf_size, device=obs.device).scatter_(1, obs_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
+#         act_one_hot = torch.zeros(batch_size, self.buf_size, device=obs.device).scatter_(1, act_del.unsqueeze(1), 1.0)  # TODO: check that scatter_ doesn't create a [1.0] tensor on CPU
+#
+#         input_obs = torch.cat((obs, obs_one_hot), dim=1)
+#         input_act = torch.cat((act_buf, act_one_hot), dim=1)
+#
+#         h_obs = F.relu(self.lin_obs(input_obs))
+#         h_act = F.relu(self.lin_act(input_act))
+#
+#         if self.is_Q_network:
+#             h = torch.cat((h_obs, h_act, act), dim=1)
+#         else:
+#             h = torch.cat((h_obs, h_act), dim=1)
+#
+#         h = self.lin_merged(h)
+#
+#         return h
 
 
 class DelayedMlpModule(Module):

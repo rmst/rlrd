@@ -12,9 +12,8 @@ from agents.memory import TrajMemoryNoHidden
 from agents.nn import no_grad, exponential_moving_average
 from agents.util import partial
 
-from agents.sac_models_rd import Mlp
+from agents.drtac_models import Mlp
 from agents.envs import RandomDelayEnv
-from collections import deque
 
 
 @dataclass(eq=0)
@@ -42,7 +41,7 @@ class Agent(agents.sac.Agent):
         self.memory = TrajMemoryNoHidden(self.memory_size, self.batchsize, device, history=self.act_buf_size)
         self.traj_new_actions = [None, ] * self.act_buf_size
         self.traj_new_actions_log_prob = [None, ] * self.act_buf_size
-        self.traj_new_augm_obs = [None, ] * self.act_buf_size
+        self.traj_new_augm_obs = [None, ] * (self.act_buf_size + 1)  # + 1 because the trajectory is obs0 -> rew1(obs0,act0) -> obs1 -> ...
 
         self.is_training = False
 
@@ -58,14 +57,16 @@ class Agent(agents.sac.Agent):
         print(f"DEBUG: terminals: {terminals}")
 
         # to determine the length of the n-step backup, nstep_len is the time at which the currently computed action (== i) or any action that followed (< i) has been applied first:
+        # when nstep_len is k (in 0..self.act_buf_size-1), it means that the action computed with the first augmented observation of the trajectory will have an effect k+1 steps later
+        # (either it will be applied, or an action that follows it will be applied)
         int_tens_type = obs_del = augm_obs_traj[0][2].dtype
         ones_tens = torch.ones(batch_size, device=self.device, dtype=int_tens_type)
         nstep_len = ones_tens * self.act_buf_size
-        for i in reversed(range(self.act_buf_size)):
-            obs_del = augm_obs_traj[i][2]
-            act_del = augm_obs_traj[i][3]
+        for i in reversed(range(self.act_buf_size)):  # caution: we don't care about the delay of the first observation in the trajectory, but we care about the last one
+            obs_del = augm_obs_traj[i + 1][2]
+            act_del = augm_obs_traj[i + 1][3]
             tot_del = obs_del + act_del
-            print(f"DEBUG: i: {i}")
+            print(f"DEBUG: i + 1: {i + 1}")
             print(f"DEBUG: obs_del: {obs_del}")
             print(f"DEBUG: act_del: {act_del}")
             print(f"DEBUG: tot_del: {tot_del}")
@@ -80,39 +81,63 @@ class Agent(agents.sac.Agent):
         print(f"DEBUG:nstep_one_hot: {nstep_one_hot}")
 
         # use the current policy to compute a new trajectory of actions of length self.act_buf_size
-        for i in range(self.act_buf_size):
-            # compute a new action and update the corresponding augmented observation:
-            augm_obs = augm_obs_traj[i]
-            print(f"DEBUG: augm_obs before: {augm_obs}")
+        for i in range(self.act_buf_size + 1):
+            # compute a new action and update the corresponding *next* augmented observation:
+            augm_obs = augm_obs_traj[i]  # FIXME: this probably modifies augm_obs_traj, check that this is not an issue
+            print(f"DEBUG: augm_obs at index {i}: {augm_obs}")
             if i > 0:
                 # FIXME: check that this won't mess with autograd
                 act_slice = tuple(self.traj_new_actions[self.act_buf_size - i:self.act_buf_size])  # FIXME: check that first action in the action buffer is indeed the last computed action
                 augm_obs = augm_obs[:1] + ((act_slice + augm_obs[1][i:]), ) + augm_obs[2:]
-                print(f"DEBUG: augm_obs after: {augm_obs}")
-            new_action_distribution = self.model.actor(augm_obs)
-            # this is stored in right -> left order for replacing correctly in augm_obs:
-            self.traj_new_actions[self.act_buf_size - i - 1] = new_action_distribution.rsample()
-            # this is stored in right -> left order for consistency:
-            self.traj_new_actions_log_prob[self.act_buf_size - i - 1] = new_action_distribution.log_prob(self.traj_new_actions[self.act_buf_size - i - 1])
+                print(f"DEBUG: augm_obs at index {i} after replacing actions: {augm_obs}")
+            if i < self.act_buf_size:  # we don't compute the action for the last observation of the trajectory
+                new_action_distribution = self.model.actor(augm_obs)
+                # this is stored in right -> left order for replacing correctly in augm_obs:
+                self.traj_new_actions[self.act_buf_size - i - 1] = new_action_distribution.rsample()
+                # this is stored in left -> right order for to be consistent with the reward trajectory:
+                self.traj_new_actions_log_prob[i] = new_action_distribution.log_prob(self.traj_new_actions[self.act_buf_size - i - 1])
+            # this is stored in left -> right order:
+            self.traj_new_augm_obs[i] = augm_obs
         print(f"DEBUG: self.traj_new_actions: {self.traj_new_actions}")
         print(f"DEBUG: self.traj_new_actions_log_prob: {self.traj_new_actions_log_prob}")
+        print(f"DEBUG: self.traj_new_augm_obs: {self.traj_new_augm_obs}")
+
+        # We now compute the state-value estimate of the augmented states at which the computed actions will be applied for each trajectory of the batch
+        # (caution: this can be a different position in the trajectory for each element of the batch).
+
+        # We expect each augmented state to be of shape (obs:tensor, act_buf:(tensor, ..., tensor), obs_del:tensor, act_del:tensor). Each tensor is batched.
+        # We want to execute only 1 forward pass in the state-value estimator, therefore we recreate a batched augmented state for this specific purpose.
+
+        print(f"DEBUG: nstep_len: {nstep_len}")
+        obs_s = torch.stack([self.traj_new_augm_obs[i + 1][0][ibatch] for ibatch, i in enumerate(nstep_len)])
+        act_s = tuple(torch.stack([self.traj_new_augm_obs[i + 1][1][iact][ibatch] for ibatch, i in enumerate(nstep_len)]) for iact in range(self.act_buf_size))
+        od_s = torch.stack([self.traj_new_augm_obs[i + 1][2][ibatch] for ibatch, i in enumerate(nstep_len)])
+        ad_s = torch.stack([self.traj_new_augm_obs[i + 1][3][ibatch] for ibatch, i in enumerate(nstep_len)])
+        mod_augm_obs = tuple((obs_s, act_s, od_s, ad_s))
+        print(f"DEBUG: mod_augm_obs: {mod_augm_obs}")
+
+        # These are the delayed state-value estimates we are looking for:
+
+        mod_val = [c(mod_augm_obs) for c in self.model_target.critics]
+        mod_val = reduce(torch.min, torch.stack(mod_val)).squeeze()
+        print(f"DEBUG: mod_val: {mod_val}")
+
+        # Now let us use this to compute the state-value targets of the batch of initial augmented states:
+        val = torch.zeros(batch_size)
+        backup_started = torch.zeros(batch_size)
+        print(f"DEBUG: self.discount: {self.discount}")
+        for i in reversed(range(nstep_max_len + 1)):
+            start_backup_mask = nstep_one_hot[:, i]
+            backup_started += start_backup_mask
+            print(f"DEBUG: i: {i}")
+            print(f"DEBUG: start_backup_mask: {start_backup_mask}")
+            print(f"DEBUG: backup_started: {backup_started}")
+            val = rew_traj[i] + backup_started * self.discount * (val + start_backup_mask * mod_val)
+            print(f"DEBUG: rew_traj[i]: {rew_traj[i]}")
+            print(f"DEBUG: new val: {val}")
+
 
         assert False
-
-        # we now compute the state-value target:
-        # val contains the state-value estimates at step t+1+nstep_len: v() (can be different for each element of the batch)
-        for i in reversed(range(nstep_max_len)):
-            rew = rew_traj[i]
-            val = rew + (1. - nstep_one_hot) * self.discount * val
-
-        next_val_ = [c(obs_, act_) for c in self.model_target.critics]
-        next_val_ = reduce(torch.min, torch.stack(next_val_))
-        # XXX not normalizing
-
-        # accumulate
-        val_ = next_val_[:, :, 0]  # XXX ignore entropy component for now
-        for rew_, don_ in zip(reversed(rewards_traj), reversed(done_mask)):
-            val_ = rew_ + (1. - don_.float()) * self.discount * val_
 
 
         # critic loss
@@ -173,7 +198,7 @@ if __name__ == "__main__":
         rounds=5,
         steps=500,
         Agent=partial(Agent, device='cpu', memory_size=1000000, start_training=256, batchsize=4, Model=Mlp),
-        Env=partial(RandomDelayEnv, min_observation_delay=1, sup_observation_delay=3, min_action_delay=1, sup_action_delay=2),
+        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=2, min_action_delay=0, sup_action_delay=2),
     )
 
     run(DacTest)
