@@ -59,6 +59,10 @@ class Agent(agents.sac.Agent):
         print(f"DEBUG: rew_traj: {rew_traj}")
         print(f"DEBUG: terminals: {terminals}")
 
+        # value of the first augmented state:
+        values = [c(augm_obs_traj[0]).squeeze() for c in self.model.critics]
+        print(f"DEBUG: values: {values}")
+
         # to determine the length of the n-step backup, nstep_len is the time at which the currently computed action (== i) or any action that followed (< i) has been applied first:
         # when nstep_len is k (in 0..self.act_buf_size-1), it means that the action computed with the first augmented observation of the trajectory will have an effect k+1 steps later
         # (either it will be applied, or an action that follows it will be applied)
@@ -86,7 +90,7 @@ class Agent(agents.sac.Agent):
         # use the current policy to compute a new trajectory of actions of length self.act_buf_size
         for i in range(self.act_buf_size + 1):
             # compute a new action and update the corresponding *next* augmented observation:
-            augm_obs = augm_obs_traj[i]  # FIXME: this probably modifies augm_obs_traj, check that this is not an issue
+            augm_obs = augm_obs_traj[i]  # FIXME: this modifies augm_obs_traj, check that this is not an issue
             print(f"DEBUG: augm_obs at index {i}: {augm_obs}")
             if i > 0:
                 # FIXME: check that this won't mess with autograd
@@ -119,16 +123,55 @@ class Agent(agents.sac.Agent):
         mod_augm_obs = tuple((obs_s, act_s, od_s, ad_s))
         print(f"DEBUG: mod_augm_obs: {mod_augm_obs}")
 
-        # These are the delayed state-value estimates we are looking for:
+        print("DEBUG: --- CRITIC LOSS ---")
 
-        mod_val = [c(mod_augm_obs) for c in self.model_target.critics]
-        mod_val = reduce(torch.min, torch.stack(mod_val)).squeeze()
-        print(f"DEBUG: mod_val before removing terminal states: {mod_val}")
-        mod_val = mod_val * (1. - terminals)
-        print(f"DEBUG: mod_val after removing terminal states: {mod_val}")
+        with torch.no_grad():
 
-        # Now let us use this to compute the state-value targets of the batch of initial augmented states:
-        val = torch.zeros(batch_size)
+            # These are the delayed state-value estimates we are looking for:
+            mod_val = [c(mod_augm_obs) for c in self.model_target.critics]
+            mod_val = reduce(torch.min, torch.stack(mod_val)).squeeze()  # minimum target estimate
+            print(f"DEBUG: mod_val before removing terminal states: {mod_val}")
+            mod_val = mod_val * (1. - terminals)
+            print(f"DEBUG: mod_val after removing terminal states: {mod_val}")
+
+            # Now let us use this to compute the state-value targets of the batch of initial augmented states:
+
+            value_target = torch.zeros(batch_size)
+            backup_started = torch.zeros(batch_size)
+            print(f"DEBUG: self.discount: {self.discount}")
+            print(f"DEBUG: self.reward_scale: {self.reward_scale}")
+            print(f"DEBUG: self.entropy_scale: {self.entropy_scale}")
+            print(f"DEBUG: terminals: {terminals}")
+            for i in reversed(range(nstep_max_len + 1)):
+                start_backup_mask = nstep_one_hot[:, i]
+                backup_started += start_backup_mask
+                print(f"DEBUG: i: {i}")
+                print(f"DEBUG: start_backup_mask: {start_backup_mask}")
+                print(f"DEBUG: backup_started: {backup_started}")
+                value_target = self.reward_scale * rew_traj[i] - self.entropy_scale * self.traj_new_actions_log_prob[i] + backup_started * self.discount * (value_target + start_backup_mask * mod_val)
+                print(f"DEBUG: rew_traj[i]: {rew_traj[i]}")
+                print(f"DEBUG: self.traj_new_actions_log_prob[i]: {self.traj_new_actions_log_prob[i]}")
+                print(f"DEBUG: new value_target: {value_target}")
+            print(f"DEBUG: state-value target: {value_target}")
+
+        # end of torch.no_grad()
+
+        assert values[0].shape == value_target.shape, f"values[0].shape : {values[0].shape} != value_target.shape : {value_target.shape}"
+        assert not value_target.requires_grad
+
+        # Now the critic loss is:
+
+        loss_critic = sum(mse_loss(v, value_target) for v in values)
+        print(f"DEBUG: loss_critic: {loss_critic}")
+
+        # actor loss:
+        # TODO: there is probably a way of merging this with the previous for loop
+
+        print("DEBUG: --- ACTOR LOSS ---")
+        model_mod_val = [c(mod_augm_obs) for c in self.model_nograd.critics]
+        model_mod_val = reduce(torch.min, torch.stack(model_mod_val)).squeeze()  # minimum model estimate
+        print(f"DEBUG: model_mod_val: {model_mod_val}")
+        loss_actor = torch.zeros(batch_size)
         backup_started = torch.zeros(batch_size)
         print(f"DEBUG: self.discount: {self.discount}")
         print(f"DEBUG: self.reward_scale: {self.reward_scale}")
@@ -140,40 +183,15 @@ class Agent(agents.sac.Agent):
             print(f"DEBUG: i: {i}")
             print(f"DEBUG: start_backup_mask: {start_backup_mask}")
             print(f"DEBUG: backup_started: {backup_started}")
-            val = self.reward_scale * rew_traj[i] - self.entropy_scale * self.traj_new_actions_log_prob[i] + backup_started * self.discount * (val + start_backup_mask * mod_val)
-            print(f"DEBUG: rew_traj[i]: {rew_traj[i]}")
+            # TODO: check signs and indexes (WIP)
+            loss_actor = - self.entropy_scale * self.traj_new_actions_log_prob[i] + backup_started * self.discount * (loss_actor + start_backup_mask * model_mod_val)
             print(f"DEBUG: self.traj_new_actions_log_prob[i]: {self.traj_new_actions_log_prob[i]}")
-            print(f"DEBUG: new val: {val}")
-        print(f"DEBUG: state-value target: {val}")
+            print(f"DEBUG: new loss_actor: {loss_actor}")
+        loss_actor = loss_actor * -1.0
+        loss_actor = loss_actor.sum()
+        print(f"DEBUG: final loss_actor: {loss_actor}")
 
         assert False
-
-
-        # critic loss
-        _, next_value_target, _ = self.model_target((next_obs[0], new_actions.detach()))
-        next_value_target = reduce(torch.min, next_value_target)
-        next_value_target = self.outputnorm_target.unnormalize(next_value_target)
-
-        reward_components = torch.stack((
-            self.reward_scale * rewards,
-            - self.entropy_scale * new_actions_log_prob.detach(),
-        ), dim=1)
-
-        value_target = reward_components + (1. - terminals[:, None]) * self.discount * next_value_target
-        # TODO: is it really that helpful/necessary to do the outnorm update here and to recompute the values?
-        value_target = self.outputnorm.update(value_target)
-        values = tuple(c(h) for c, h in zip(self.model.critic_output_layers, hidden))  # recompute values (weights changed)
-
-        assert values[0].shape == value_target.shape and not value_target.requires_grad
-        loss_critic = sum(mse_loss(v, value_target) for v in values)
-
-        # actor loss
-        _, next_value, _ = self.model_nograd((next_obs[0], new_actions))
-        next_value = reduce(torch.min, next_value)
-        new_value = (1. - terminals[:, None]) * self.discount * self.outputnorm.unnormalize(next_value)
-        new_value[:, -1] -= self.entropy_scale * new_actions_log_prob
-        assert new_value.shape == (self.batchsize, 2)
-        loss_actor = - self.outputnorm.normalize_sum(new_value.sum(1)).mean()  # normalize_sum preserves relative scale
 
         # update model
         self.optimizer.zero_grad()
@@ -183,16 +201,16 @@ class Agent(agents.sac.Agent):
 
         # update target model and normalizers
         exponential_moving_average(self.model_target.parameters(), self.model.parameters(), self.target_update)
-        exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)
+        # exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)
 
         return dict(
             loss_total=loss_total.detach(),
             loss_critic=loss_critic.detach(),
             loss_actor=loss_actor.detach(),
-            outputnorm_reward_mean=self.outputnorm.mean[0],
-            outputnorm_entropy_mean=self.outputnorm.mean[-1],
-            outputnorm_reward_std=self.outputnorm.std[0],
-            outputnorm_entropy_std=self.outputnorm.std[-1],
+            # outputnorm_reward_mean=self.outputnorm.mean[0],
+            # outputnorm_entropy_mean=self.outputnorm.mean[-1],
+            # outputnorm_reward_std=self.outputnorm.std[0],
+            # outputnorm_entropy_std=self.outputnorm.std[-1],
             memory_size=len(self.memory),
             # entropy_scale=self.entropy_scale
         )
