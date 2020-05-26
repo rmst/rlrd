@@ -249,7 +249,7 @@ DrtacTraining = partial(
     Training,
     Agent=partial(
         Agent,
-        rtac=True,  # set this to True for reverting to RTAC
+        rtac=False,  # set this to True for reverting to RTAC
         batchsize=128,
         Model=partial(
             Mlp,
