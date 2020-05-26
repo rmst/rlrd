@@ -25,8 +25,9 @@ def print_debug(st):
 
 @dataclass(eq=0)
 class Agent(agents.sac.Agent):
-    Model: type = agents.rtac_models.MlpDouble
+    Model: type = Mlp
     loss_alpha: float = 0.2
+    rtac: bool = False
 
     def __post_init__(self, Env):
         with Env() as env:
@@ -96,6 +97,16 @@ class Agent(agents.sac.Agent):
         # print_debug(f"nstep_max_len: {nstep_max_len}")
         nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
         # print_debug(f"nstep_one_hot: {nstep_one_hot}")
+
+        if self.rtac:  # RTAC is equivalent to doing only 1-step backups (i.e. nstep_len==0)
+            nstep_len = torch.zeros(batch_size, device=self.device, dtype=int_tens_type, requires_grad=False)
+            nstep_max_len = torch.max(nstep_len)
+            nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
+            terminals = terminals if self.act_buf_size == 1 else terminals * 0.0  # the way the replay memory works, RTAC will never encounter terminal states for buffers of more than 1 action
+        # print_debug(f"nstep_len: {nstep_len}")
+        # print_debug(f"nstep_max_len: {nstep_max_len}")
+        # print_debug(f"nstep_one_hot: {nstep_one_hot}")
+        # print_debug(f"terminals: {terminals}")
 
         # use the current policy to compute a new trajectory of actions of length self.act_buf_size
         for i in range(self.act_buf_size + 1):
@@ -238,6 +249,7 @@ DrtacTraining = partial(
     Training,
     Agent=partial(
         Agent,
+        rtac=True,  # set this to True for reverting to RTAC
         batchsize=128,
         Model=partial(
             Mlp,
