@@ -1,6 +1,6 @@
 import gym
 import torch
-from torch.nn import Linear, LSTM
+from torch.nn import Linear, LSTM, GRU
 import numpy as np
 
 from agents.nn import TanhNormalLayer
@@ -21,6 +21,36 @@ class StatefulActorModule(ActorModule):
 
     def reset(self):
         raise NotImplementedError()
+
+
+class GruModel(StatefulActorModule):
+    def __init__(self, observation_space, action_space, hidden_units: int = 256):
+        super().__init__()
+        assert isinstance(observation_space, gym.spaces.Tuple)
+        input_dim = sum(s.shape[0] for s in observation_space)
+        self.gru = GRU(input_dim, hidden_units)
+
+        self.hidden_units = hidden_units
+        self.critic_layer = Linear(hidden_units, 1)
+        self.actor_layer = TanhNormalLayer(hidden_units, action_space.shape[0])
+        self.critic_output_layers = (self.critic_layer,)
+
+    def actor(self, memory_state, x):
+        a, memory_state, _, _ = self(memory_state, x)
+        return a, memory_state
+
+    def reset(self):
+        return np.random.standard_normal(self.hidden_units).astype(np.float32)
+
+    def forward(self, memory_state, x):
+        # self.lstm.flatten_parameters()
+        assert isinstance(x, tuple)
+        x = torch.cat(x, dim=1)
+        batchsize = x.shape[0]
+        (hidden_activations,), ((hn,), (cn,)) = self.gru(x[None], memory_state[None])
+        v = self.critic_layer(hidden_activations)
+        action_distribution = self.actor_layer(hidden_activations)
+        return action_distribution, (hn, cn), (v,), (hidden_activations,)
 
 
 class LstmModel(StatefulActorModule):

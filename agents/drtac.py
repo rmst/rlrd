@@ -234,43 +234,30 @@ class Agent(agents.sac.Agent):
         )
 
 
-Dac_rtrl_no_one_hot = partial(  # rtrl setting, no one-hot (constant delay)
+DrtacTraining = partial(
     Training,
-    Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
-                  Model=partial(Mlp,
-                                act_delay=False,
-                                obs_delay=False)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=0,
-                sup_observation_delay=1,
-                min_action_delay=0,
-                sup_action_delay=1),
-)
+    Agent=partial(
+        Agent,
+        batchsize=128,
+        Model=partial(
+            Mlp,
+            act_delay=True,
+            obs_delay=True)),
+    Env=partial(
+        RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=1,
+        min_action_delay=0,
+        sup_action_delay=1),
+        # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
+    )
 
-Dac_od02oh_ad01noh = partial(  # random obs delay: 0-1, obs one-hot
-    Training,
-    Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
-                  Model=partial(Mlp,
-                                act_delay=False,
-                                obs_delay=True)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=0,
-                sup_observation_delay=2,
-                min_action_delay=0,
-                sup_action_delay=1),
-)
 
 Dac_od02noh_ad01noh = partial(  # same with no one-hot, to check whether the algorithm is capable of making sense of the one-hot delay
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=False,
                                 obs_delay=False)),
@@ -285,8 +272,7 @@ Dac_od02noh_ad01noh = partial(  # same with no one-hot, to check whether the alg
 Dac_od01noh_ad02oh = partial(  # random act delay: 0-1, act one-hot (should be similar to Dac_od02oh_ad01noh)
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=True,
                                 obs_delay=False)),
@@ -301,8 +287,7 @@ Dac_od01noh_ad02oh = partial(  # random act delay: 0-1, act one-hot (should be s
 Dac_od01noh_ad12noh = partial(  # constant act delay: 1, no one-hot
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=False,
                                 obs_delay=False)),
@@ -317,8 +302,7 @@ Dac_od01noh_ad12noh = partial(  # constant act delay: 1, no one-hot
 Dac_od12noh_ad12noh = partial(  # constant act and obs delay: 1, 1, no one-hot
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=False,
                                 obs_delay=False)),
@@ -333,8 +317,7 @@ Dac_od12noh_ad12noh = partial(  # constant act and obs delay: 1, 1, no one-hot
 Dac_od23noh_ad23noh = partial(  # constant act and obs delay: 2, 2, no one-hot
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=False,
                                 obs_delay=False)),
@@ -349,8 +332,7 @@ Dac_od23noh_ad23noh = partial(  # constant act and obs delay: 2, 2, no one-hot
 Dac_od02oh_ad02oh = partial(  # random act and obs delay: 0-1, 0-1, both one-hot
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=True,
                                 obs_delay=True)),
@@ -365,8 +347,7 @@ Dac_od02oh_ad02oh = partial(  # random act and obs delay: 0-1, 0-1, both one-hot
 Dac_od03oh_ad03oh = partial(  # random act and obs delay: 0-2, 0-2, both one-hot
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=True,
                                 obs_delay=True)),
@@ -381,8 +362,7 @@ Dac_od03oh_ad03oh = partial(  # random act and obs delay: 0-2, 0-2, both one-hot
 Dac_od13oh_ad08oh = partial(  # random act and obs delay: 1-2, 0-7, both one-hot
     Training,
     Agent=partial(Agent,
-                  device='cuda',
-                  batchsize=256,
+                  batchsize=128,
                   Model=partial(Mlp,
                                 act_delay=True,
                                 obs_delay=True)),
@@ -397,4 +377,4 @@ Dac_od13oh_ad08oh = partial(  # random act and obs delay: 1-2, 0-7, both one-hot
 
 if __name__ == "__main__":
     from agents import run
-    run(Dac_rtrl_no_one_hot)
+    run(DrtacTraining)

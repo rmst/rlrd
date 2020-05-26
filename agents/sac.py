@@ -94,6 +94,11 @@ class Agent:
         assert values[0].shape == normalized_value_target.shape and not normalized_value_target.requires_grad
         loss_critic = sum(mse_loss(v, normalized_value_target) for v in values)
 
+        # update critic
+        self.critic_optimizer.zero_grad()
+        loss_critic.backward()
+        self.critic_optimizer.step()
+
         # actor loss
         new_value = [c(obs, new_actions) for c in self.model.critics]  # new_actions with reparametrization trick
         new_value = reduce(torch.min, new_value)  # minimum action_values
@@ -103,11 +108,7 @@ class Agent:
         new_value[:, -1] -= self.entropy_scale * new_action_distribution.log_prob(new_actions)
         loss_actor = - self.outputnorm.normalize_sum(new_value.sum(1)).mean()  # normalize_sum preserves relative scale
 
-        # update actor and critic
-        self.critic_optimizer.zero_grad()
-        loss_critic.backward()
-        self.critic_optimizer.step()
-
+        # update actor
         self.actor_optimizer.zero_grad()
         loss_actor.backward()
         self.actor_optimizer.step()
