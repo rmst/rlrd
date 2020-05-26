@@ -15,6 +15,8 @@ from agents.util import partial
 from agents.drtac_models import Mlp
 from agents.envs import RandomDelayEnv
 
+from agents import Training
+
 
 def print_debug(st):
     return
@@ -31,8 +33,8 @@ class Agent(agents.sac.Agent):
             observation_space, action_space = env.observation_space, env.action_space
             self.sup_obs_delay = env.obs_delay_range.stop
             self.sup_act_delay = env.act_delay_range.stop
-            print_debug(f"self.sup_obs_delay: {self.sup_obs_delay}")
-            print_debug(f"self.sup_act_delay: {self.sup_act_delay}")
+            # print_debug(f"self.sup_obs_delay: {self.sup_obs_delay}")
+            # print_debug(f"self.sup_act_delay: {self.sup_act_delay}")
             self.act_buf_size = self.sup_obs_delay + self.sup_act_delay - 1  # - 1 because self.sup_act_delay is actually max_act_delay as defined in the paper (self.sup_obs_delay is max_obs_delay+1)
         device = self.device  # or ("cuda" if torch.cuda.is_available() else "cpu")
         model = self.Model(observation_space, action_space)
@@ -61,15 +63,15 @@ class Agent(agents.sac.Agent):
         # TODO: act_traj is useless, it could be removed from the replay memory
 
         batch_size = terminals.shape[0]
-        print_debug(f"batch_size: {batch_size}")
-        print_debug(f"augm_obs_traj: {augm_obs_traj}")
+        # print_debug(f"batch_size: {batch_size}")
+        # print_debug(f"augm_obs_traj: {augm_obs_traj}")
         # print_debug(f"act_traj: {act_traj}")
-        print_debug(f"rew_traj: {rew_traj}")
-        print_debug(f"terminals: {terminals}")
+        # print_debug(f"rew_traj: {rew_traj}")
+        # print_debug(f"terminals: {terminals}")
 
         # value of the first augmented state:
         values = [c(augm_obs_traj[0]).squeeze() for c in self.model.critics]
-        print_debug(f"values: {values}")
+        # print_debug(f"values: {values}")
 
         # to determine the length of the n-step backup, nstep_len is the time at which the currently computed action (== i) or any action that followed (< i) has been applied first:
         # when nstep_len is k (in 0..self.act_buf_size-1), it means that the action computed with the first augmented observation of the trajectory will have an effect k+1 steps later
@@ -81,45 +83,45 @@ class Agent(agents.sac.Agent):
             obs_del = augm_obs_traj[i + 1][2]
             act_del = augm_obs_traj[i + 1][3]
             tot_del = obs_del + act_del
-            print_debug(f"i + 1: {i + 1}")
-            print_debug(f"obs_del: {obs_del}")
-            print_debug(f"act_del: {act_del}")
-            print_debug(f"tot_del: {tot_del}")
-            print_debug(f"nstep_len before: {nstep_len}")
-            nstep_len = torch.where((tot_del <= i) & (tot_del < nstep_len), ones_tens * i, nstep_len)  # FIXME: check that this works as expected
-            print_debug(f"nstep_len after: {nstep_len}")
-        print_debug(f"nstep_len: {nstep_len}")
+            # print_debug(f"i + 1: {i + 1}")
+            # print_debug(f"obs_del: {obs_del}")
+            # print_debug(f"act_del: {act_del}")
+            # print_debug(f"tot_del: {tot_del}")
+            # print_debug(f"nstep_len before: {nstep_len}")
+            nstep_len = torch.where((tot_del <= i) & (tot_del < nstep_len), ones_tens * i, nstep_len)
+            # print_debug(f"nstep_len after: {nstep_len}")
+        # print_debug(f"nstep_len: {nstep_len}")
         nstep_max_len = torch.max(nstep_len)
         assert nstep_max_len < self.act_buf_size, "Delays longer than the action buffer (e.g. infinite) are not supported"
-        print_debug(f"nstep_max_len: {nstep_max_len}")
+        # print_debug(f"nstep_max_len: {nstep_max_len}")
         nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
-        print_debug(f"nstep_one_hot: {nstep_one_hot}")
+        # print_debug(f"nstep_one_hot: {nstep_one_hot}")
 
         # use the current policy to compute a new trajectory of actions of length self.act_buf_size
         for i in range(self.act_buf_size + 1):
             # compute a new action and update the corresponding *next* augmented observation:
             augm_obs = augm_obs_traj[i]  # FIXME: this modifies augm_obs_traj, check that this is not an issue
-            print_debug(f"augm_obs at index {i}: {augm_obs}")
+            # print_debug(f"augm_obs at index {i}: {augm_obs}")
             if i > 0:
                 # FIXME: check that this won't mess with autograd
-                act_slice = tuple(self.traj_new_actions_detach[self.act_buf_size - i:self.act_buf_size])  # FIXME: check that first action in the action buffer is indeed the last computed action
+                act_slice = tuple(self.traj_new_actions[self.act_buf_size - i:self.act_buf_size])  # FIXME: check that first action in the action buffer is indeed the last computed action
                 augm_obs = augm_obs[:1] + ((act_slice + augm_obs[1][i:]), ) + augm_obs[2:]
-                print_debug(f"augm_obs at index {i} after replacing actions: {augm_obs}")
+                # print_debug(f"augm_obs at index {i} after replacing actions: {augm_obs}")
             if i < self.act_buf_size:  # we don't compute the action for the last observation of the trajectory
                 new_action_distribution = self.model.actor(augm_obs)
                 # this is stored in right -> left order for replacing correctly in augm_obs:
                 self.traj_new_actions[self.act_buf_size - i - 1] = new_action_distribution.rsample()
                 self.traj_new_actions_detach[self.act_buf_size - i - 1] = self.traj_new_actions[self.act_buf_size - i - 1].detach()
-                print_debug(f"self.traj_new_actions[self.act_buf_size - i - 1]: {self.traj_new_actions[self.act_buf_size - i - 1]}")
+                # print_debug(f"self.traj_new_actions[self.act_buf_size - i - 1]: {self.traj_new_actions[self.act_buf_size - i - 1]}")
                 # this is stored in left -> right order for to be consistent with the reward trajectory:
                 self.traj_new_actions_log_prob[i] = new_action_distribution.log_prob(self.traj_new_actions[self.act_buf_size - i - 1])
                 self.traj_new_actions_log_prob_detach[i] = self.traj_new_actions_log_prob[i].detach()
-                print_debug(f"self.traj_new_actions_log_prob[i]: {self.traj_new_actions_log_prob[i]}")
+                # print_debug(f"self.traj_new_actions_log_prob[i]: {self.traj_new_actions_log_prob[i]}")
             # this is stored in left -> right order:
             self.traj_new_augm_obs[i] = augm_obs
-        print_debug(f"self.traj_new_actions: {self.traj_new_actions}")
-        print_debug(f"self.traj_new_actions_log_prob: {self.traj_new_actions_log_prob}")
-        print_debug(f"self.traj_new_augm_obs: {self.traj_new_augm_obs}")
+        # print_debug(f"self.traj_new_actions: {self.traj_new_actions}")
+        # print_debug(f"self.traj_new_actions_log_prob: {self.traj_new_actions_log_prob}")
+        # print_debug(f"self.traj_new_augm_obs: {self.traj_new_augm_obs}")
 
         # We now compute the state-value estimate of the augmented states at which the computed actions will be applied for each trajectory of the batch
         # (caution: this can be a different position in the trajectory for each element of the batch).
@@ -127,45 +129,45 @@ class Agent(agents.sac.Agent):
         # We expect each augmented state to be of shape (obs:tensor, act_buf:(tensor, ..., tensor), obs_del:tensor, act_del:tensor). Each tensor is batched.
         # We want to execute only 1 forward pass in the state-value estimator, therefore we recreate an artificially batched augmented state for this specific purpose.
 
-        print_debug(f"nstep_len: {nstep_len}")
+        # print_debug(f"nstep_len: {nstep_len}")
         obs_s = torch.stack([self.traj_new_augm_obs[i + 1][0][ibatch] for ibatch, i in enumerate(nstep_len)])
         act_s = tuple(torch.stack([self.traj_new_augm_obs[i + 1][1][iact][ibatch] for ibatch, i in enumerate(nstep_len)]) for iact in range(self.act_buf_size))
         od_s = torch.stack([self.traj_new_augm_obs[i + 1][2][ibatch] for ibatch, i in enumerate(nstep_len)])
         ad_s = torch.stack([self.traj_new_augm_obs[i + 1][3][ibatch] for ibatch, i in enumerate(nstep_len)])
         mod_augm_obs = tuple((obs_s, act_s, od_s, ad_s))
-        print_debug(f"mod_augm_obs: {mod_augm_obs}")
+        # print_debug(f"mod_augm_obs: {mod_augm_obs}")
 
-        print_debug(" --- CRITIC LOSS ---")
+        # print_debug(" --- CRITIC LOSS ---")
 
         with torch.no_grad():
 
             # These are the delayed state-value estimates we are looking for:
             target_mod_val = [c(mod_augm_obs) for c in self.model_target.critics]
-            print_debug(f"target_mod_val of all critics: {target_mod_val}")
+            # print_debug(f"target_mod_val of all critics: {target_mod_val}")
             target_mod_val = reduce(torch.min, torch.stack(target_mod_val)).squeeze()  # minimum target estimate
-            print_debug(f"target_mod_val before removing terminal states: {target_mod_val}")
+            # print_debug(f"target_mod_val before removing terminal states: {target_mod_val}")
             target_mod_val = target_mod_val * (1. - terminals)
-            print_debug(f"target_mod_val after removing terminal states: {target_mod_val}")
+            # print_debug(f"target_mod_val after removing terminal states: {target_mod_val}")
 
             # Now let us use this to compute the state-value targets of the batch of initial augmented states:
 
             value_target = torch.zeros(batch_size, device=self.device)
             backup_started = torch.zeros(batch_size, device=self.device)
-            print_debug(f"self.discount: {self.discount}")
-            print_debug(f"self.reward_scale: {self.reward_scale}")
-            print_debug(f"self.entropy_scale: {self.entropy_scale}")
-            print_debug(f"terminals: {terminals}")
+            # print_debug(f"self.discount: {self.discount}")
+            # print_debug(f"self.reward_scale: {self.reward_scale}")
+            # print_debug(f"self.entropy_scale: {self.entropy_scale}")
+            # print_debug(f"terminals: {terminals}")
             for i in reversed(range(nstep_max_len + 1)):
                 start_backup_mask = nstep_one_hot[:, i]
                 backup_started += start_backup_mask
-                print_debug(f"i: {i}")
-                print_debug(f"start_backup_mask: {start_backup_mask}")
-                print_debug(f"backup_started: {backup_started}")
+                # print_debug(f"i: {i}")
+                # print_debug(f"start_backup_mask: {start_backup_mask}")
+                # print_debug(f"backup_started: {backup_started}")
                 value_target = self.reward_scale * rew_traj[i] - self.entropy_scale * self.traj_new_actions_log_prob_detach[i] + backup_started * self.discount * (value_target + start_backup_mask * target_mod_val)
-                print_debug(f"rew_traj[i]: {rew_traj[i]}")
-                print_debug(f"self.traj_new_actions_log_prob_detach[i]: {self.traj_new_actions_log_prob_detach[i]}")
-                print_debug(f"new value_target: {value_target}")
-            print_debug(f"state-value target: {value_target}")
+                # print_debug(f"rew_traj[i]: {rew_traj[i]}")
+                # print_debug(f"self.traj_new_actions_log_prob_detach[i]: {self.traj_new_actions_log_prob_detach[i]}")
+                # print_debug(f"new value_target: {value_target}")
+            # print_debug(f"state-value target: {value_target}")
 
         # end of torch.no_grad()
 
@@ -175,37 +177,37 @@ class Agent(agents.sac.Agent):
         # Now the critic loss is:
 
         loss_critic = sum(mse_loss(v, value_target) for v in values)
-        print_debug(f"loss_critic: {loss_critic}")
+        # print_debug(f"loss_critic: {loss_critic}")
 
         # actor loss:
         # TODO: there is probably a way of merging this with the previous for loop
 
-        print_debug(" --- ACTOR LOSS ---")
+        # print_debug(" --- ACTOR LOSS ---")
 
-        model_mod_val = [c(mod_augm_obs) for c in self.model_nograd.critics]  # FIXME: why nograd? Also, actions in mod_augm_obs are detached, is this an issue?
-        print_debug(f"model_mod_val of all critics: {model_mod_val}")
+        model_mod_val = [c(mod_augm_obs) for c in self.model_nograd.critics]
+        # print_debug(f"model_mod_val of all critics: {model_mod_val}")
         model_mod_val = reduce(torch.min, torch.stack(model_mod_val)).squeeze()  # minimum model estimate
-        print_debug(f"model_mod_val before removing terminal states: {model_mod_val}")
+        # print_debug(f"model_mod_val before removing terminal states: {model_mod_val}")
         model_mod_val = model_mod_val * (1. - terminals)
-        print_debug(f"model_mod_val after removing terminal states: {model_mod_val}")
+        # print_debug(f"model_mod_val after removing terminal states: {model_mod_val}")
 
         loss_actor = torch.zeros(batch_size, device=self.device)
         backup_started = torch.zeros(batch_size, device=self.device)
-        print_debug(f"self.discount: {self.discount}")
-        print_debug(f"self.reward_scale: {self.reward_scale}")
-        print_debug(f"self.entropy_scale: {self.entropy_scale}")
-        print_debug(f"terminals: {terminals}")
+        # print_debug(f"self.discount: {self.discount}")
+        # print_debug(f"self.reward_scale: {self.reward_scale}")
+        # print_debug(f"self.entropy_scale: {self.entropy_scale}")
+        # print_debug(f"terminals: {terminals}")
         for i in reversed(range(nstep_max_len + 1)):
             start_backup_mask = nstep_one_hot[:, i]
             backup_started += start_backup_mask
-            print_debug(f"i: {i}")
-            print_debug(f"start_backup_mask: {start_backup_mask}")
-            print_debug(f"backup_started: {backup_started}")
+            # print_debug(f"i: {i}")
+            # print_debug(f"start_backup_mask: {start_backup_mask}")
+            # print_debug(f"backup_started: {backup_started}")
             loss_actor = - self.entropy_scale * self.traj_new_actions_log_prob[i] + backup_started * self.discount * (loss_actor + start_backup_mask * model_mod_val)
-            print_debug(f"self.traj_new_actions_log_prob[i]: {self.traj_new_actions_log_prob[i]}")
-            print_debug(f"new negative loss_actor: {loss_actor}")
-        loss_actor = - loss_actor.sum()  # FIXME: in rtac, there is a mean() here, and assert new_value.shape == (self.batchsize, 2). Why?
-        print_debug(f"final loss_actor: {loss_actor}")
+            # print_debug(f"self.traj_new_actions_log_prob[i]: {self.traj_new_actions_log_prob[i]}")
+            # print_debug(f"new negative loss_actor: {loss_actor}")
+        loss_actor = - loss_actor.mean(0)
+        # print_debug(f"final loss_actor: {loss_actor}")
 
         # update model
         self.optimizer.zero_grad()
@@ -232,16 +234,167 @@ class Agent(agents.sac.Agent):
         )
 
 
+Dac_rtrl_no_one_hot = partial(  # rtrl setting, no one-hot (constant delay)
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=False,
+                                obs_delay=False)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=0,
+                sup_observation_delay=1,
+                min_action_delay=0,
+                sup_action_delay=1),
+)
+
+Dac_od02oh_ad01noh = partial(  # random obs delay: 0-1, obs one-hot
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=False,
+                                obs_delay=True)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=0,
+                sup_observation_delay=2,
+                min_action_delay=0,
+                sup_action_delay=1),
+)
+
+Dac_od02noh_ad01noh = partial(  # same with no one-hot, to check whether the algorithm is capable of making sense of the one-hot delay
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=False,
+                                obs_delay=False)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=0,
+                sup_observation_delay=2,
+                min_action_delay=0,
+                sup_action_delay=1),
+)
+
+Dac_od01noh_ad02oh = partial(  # random act delay: 0-1, act one-hot (should be similar to Dac_od02oh_ad01noh)
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=True,
+                                obs_delay=False)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=0,
+                sup_observation_delay=1,
+                min_action_delay=0,
+                sup_action_delay=2),
+)
+
+Dac_od01noh_ad12noh = partial(  # constant act delay: 1, no one-hot
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=False,
+                                obs_delay=False)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=0,
+                sup_observation_delay=1,
+                min_action_delay=1,
+                sup_action_delay=2),
+)
+
+Dac_od12noh_ad12noh = partial(  # constant act and obs delay: 1, 1, no one-hot
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=False,
+                                obs_delay=False)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=1,
+                sup_observation_delay=2,
+                min_action_delay=1,
+                sup_action_delay=2),
+)
+
+Dac_od23noh_ad23noh = partial(  # constant act and obs delay: 2, 2, no one-hot
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=False,
+                                obs_delay=False)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=2,
+                sup_observation_delay=3,
+                min_action_delay=2,
+                sup_action_delay=3),
+)
+
+Dac_od02oh_ad02oh = partial(  # random act and obs delay: 0-1, 0-1, both one-hot
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=True,
+                                obs_delay=True)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=0,
+                sup_observation_delay=2,
+                min_action_delay=0,
+                sup_action_delay=2),
+)
+
+Dac_od03oh_ad03oh = partial(  # random act and obs delay: 0-2, 0-2, both one-hot
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=True,
+                                obs_delay=True)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=0,
+                sup_observation_delay=3,
+                min_action_delay=0,
+                sup_action_delay=3),
+)
+
+Dac_od13oh_ad08oh = partial(  # random act and obs delay: 1-2, 0-7, both one-hot
+    Training,
+    Agent=partial(Agent,
+                  device='cuda',
+                  batchsize=256,
+                  Model=partial(Mlp,
+                                act_delay=True,
+                                obs_delay=True)),
+    Env=partial(RandomDelayEnv,
+                id="Pendulum-v0",
+                min_observation_delay=1,
+                sup_observation_delay=3,
+                min_action_delay=0,
+                sup_action_delay=8),
+)
+
+
 if __name__ == "__main__":
-    from agents import Training, run
-
-    DacTest = partial(
-        Training,
-        epochs=2,
-        rounds=5,
-        Agent=partial(Agent, device='cuda', Model=Mlp, batchsize=4),
-        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=1, min_action_delay=0, sup_action_delay=1),
-    )
-
-    run(DacTest)
-# run(Rtac_Avenue_Test)
+    from agents import run
+    run(Dac_rtrl_no_one_hot)
