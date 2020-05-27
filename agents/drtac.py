@@ -265,6 +265,12 @@ DrtacTraining = partial(
         # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
     )
 
+DrtacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
+    DrtacTraining,
+    Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
+    steps=5000,
+    Agent=partial(memory_size=2500000, training_steps=2/5, start_training=25000, discount=0.996, entropy_scale=2/5)
+)
 
 Dac_od02noh_ad01noh = partial(  # same with no one-hot, to check whether the algorithm is capable of making sense of the one-hot delay
     Training,
