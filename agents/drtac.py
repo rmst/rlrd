@@ -272,6 +272,28 @@ DrtacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
     Agent=partial(memory_size=2500000, training_steps=2/5, start_training=25000, discount=0.996, entropy_scale=2/5)
 )
 
+# To compare against SAC:
+DelayedSacTraining = partial(
+    Training,
+    Agent=partial(
+        agents.sac.Agent,
+        batchsize=128,
+        Model=partial(
+            agents.sac_models_rd.Mlp,
+            act_delay=True,
+            obs_delay=True),
+        OutputNorm=partial(beta=0.),
+    ),
+    Env=partial(
+        RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=1,
+        min_action_delay=0,
+        sup_action_delay=1,
+    ),
+)
+
 Dac_od02noh_ad01noh = partial(  # same with no one-hot, to check whether the algorithm is capable of making sense of the one-hot delay
     Training,
     Agent=partial(Agent,
