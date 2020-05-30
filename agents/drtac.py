@@ -318,6 +318,14 @@ DelayedSacTraining = partial(
     ),
 )
 
+DelayedSacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
+    DelayedSacTraining,
+    Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
+    steps=5000,
+    Agent=partial(memory_size=2500000, training_steps=2/5, start_training=25000, discount=0.996, entropy_scale=2/5)
+)
+
+
 if __name__ == "__main__":
     from agents import run
     run(DrtacTraining)

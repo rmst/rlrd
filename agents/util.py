@@ -193,6 +193,7 @@ def git_info(path=None):
 # === serialization ====================================================================================================
 
 def dump(obj, path):
+    # TODO: use atomic write: https://stackoverflow.com/questions/2333872/atomic-writing-to-file-with-python
     with DelayInterrupt():  # Continue to save even if SIGINT or SIGTERM is sent and raise KeyboardInterrupt afterwards.
         with open(path, 'wb') as f:
             return pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
