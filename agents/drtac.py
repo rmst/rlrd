@@ -37,6 +37,10 @@ class Agent(agents.sac.Agent):
             # print_debug(f"self.sup_obs_delay: {self.sup_obs_delay}")
             # print_debug(f"self.sup_act_delay: {self.sup_act_delay}")
             self.act_buf_size = self.sup_obs_delay + self.sup_act_delay - 1  # - 1 because self.sup_act_delay is actually max_act_delay as defined in the paper (self.sup_obs_delay is max_obs_delay+1)
+            self.old_act_buf_size = deepcopy(self.act_buf_size)
+            if self.rtac:
+                # print_debug(f"RTAC FLAG IS TRUE, HISTORY OF SIZE 1")
+                self.act_buf_size = 1
         device = self.device  # or ("cuda" if torch.cuda.is_available() else "cpu")
         model = self.Model(observation_space, action_space)
         self.model = model.to(device)
@@ -79,26 +83,27 @@ class Agent(agents.sac.Agent):
         # (either it will be applied, or an action that follows it will be applied)
         int_tens_type = obs_del = augm_obs_traj[0][2].dtype
         ones_tens = torch.ones(batch_size, device=self.device, dtype=int_tens_type, requires_grad=False)
-        nstep_len = ones_tens * self.act_buf_size
-        for i in reversed(range(self.act_buf_size)):  # caution: we don't care about the delay of the first observation in the trajectory, but we care about the last one
-            obs_del = augm_obs_traj[i + 1][2]
-            act_del = augm_obs_traj[i + 1][3]
-            tot_del = obs_del + act_del
-            # print_debug(f"i + 1: {i + 1}")
-            # print_debug(f"obs_del: {obs_del}")
-            # print_debug(f"act_del: {act_del}")
-            # print_debug(f"tot_del: {tot_del}")
-            # print_debug(f"nstep_len before: {nstep_len}")
-            nstep_len = torch.where((tot_del <= i) & (tot_del < nstep_len), ones_tens * i, nstep_len)
-            # print_debug(f"nstep_len after: {nstep_len}")
-        # print_debug(f"nstep_len: {nstep_len}")
-        nstep_max_len = torch.max(nstep_len)
-        assert nstep_max_len < self.act_buf_size, "Delays longer than the action buffer (e.g. infinite) are not supported"
-        # print_debug(f"nstep_max_len: {nstep_max_len}")
-        nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
-        # print_debug(f"nstep_one_hot: {nstep_one_hot}")
 
-        if self.rtac:  # RTAC is equivalent to doing only 1-step backups (i.e. nstep_len==0)
+        if not self.rtac:
+            nstep_len = ones_tens * self.act_buf_size
+            for i in reversed(range(self.act_buf_size)):  # caution: we don't care about the delay of the first observation in the trajectory, but we care about the last one
+                obs_del = augm_obs_traj[i + 1][2]
+                act_del = augm_obs_traj[i + 1][3]
+                tot_del = obs_del + act_del
+                # print_debug(f"i + 1: {i + 1}")
+                # print_debug(f"obs_del: {obs_del}")
+                # print_debug(f"act_del: {act_del}")
+                # print_debug(f"tot_del: {tot_del}")
+                # print_debug(f"nstep_len before: {nstep_len}")
+                nstep_len = torch.where((tot_del <= i) & (tot_del < nstep_len), ones_tens * i, nstep_len)
+                # print_debug(f"nstep_len after: {nstep_len}")
+            # print_debug(f"nstep_len: {nstep_len}")
+            nstep_max_len = torch.max(nstep_len)
+            assert nstep_max_len < self.act_buf_size, "Delays longer than the action buffer (e.g. infinite) are not supported"
+            # print_debug(f"nstep_max_len: {nstep_max_len}")
+            nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
+            # print_debug(f"nstep_one_hot: {nstep_one_hot}")
+        else:  # RTAC is equivalent to doing only 1-step backups (i.e. nstep_len==0)
             nstep_len = torch.zeros(batch_size, device=self.device, dtype=int_tens_type, requires_grad=False)
             nstep_max_len = torch.max(nstep_len)
             nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
@@ -142,7 +147,7 @@ class Agent(agents.sac.Agent):
 
         # print_debug(f"nstep_len: {nstep_len}")
         obs_s = torch.stack([self.traj_new_augm_obs[i + 1][0][ibatch] for ibatch, i in enumerate(nstep_len)])
-        act_s = tuple(torch.stack([self.traj_new_augm_obs[i + 1][1][iact][ibatch] for ibatch, i in enumerate(nstep_len)]) for iact in range(self.act_buf_size))
+        act_s = tuple(torch.stack([self.traj_new_augm_obs[i + 1][1][iact][ibatch] for ibatch, i in enumerate(nstep_len)]) for iact in range(self.old_act_buf_size))
         od_s = torch.stack([self.traj_new_augm_obs[i + 1][2][ibatch] for ibatch, i in enumerate(nstep_len)])
         ad_s = torch.stack([self.traj_new_augm_obs[i + 1][3][ibatch] for ibatch, i in enumerate(nstep_len)])
         mod_augm_obs = tuple((obs_s, act_s, od_s, ad_s))
@@ -265,6 +270,25 @@ DrtacTraining = partial(
         # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
     )
 
+DrtacTest = partial(
+    Training,
+    Agent=partial(
+        Agent,
+        rtac=True,  # set this to True for reverting to RTAC
+        batchsize=128,
+        start_training=256,
+        Model=partial(
+            Mlp,
+            act_delay=True,
+            obs_delay=True)),
+    Env=partial(
+        RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=2,
+        min_action_delay=0,
+        sup_action_delay=2))
+
 DrtacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
     DrtacTraining,
     Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
@@ -293,127 +317,6 @@ DelayedSacTraining = partial(
         sup_action_delay=1,
     ),
 )
-
-Dac_od02noh_ad01noh = partial(  # same with no one-hot, to check whether the algorithm is capable of making sense of the one-hot delay
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=False,
-                                obs_delay=False)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=0,
-                sup_observation_delay=2,
-                min_action_delay=0,
-                sup_action_delay=1),
-)
-
-Dac_od01noh_ad02oh = partial(  # random act delay: 0-1, act one-hot (should be similar to Dac_od02oh_ad01noh)
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=True,
-                                obs_delay=False)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=0,
-                sup_observation_delay=1,
-                min_action_delay=0,
-                sup_action_delay=2),
-)
-
-Dac_od01noh_ad12noh = partial(  # constant act delay: 1, no one-hot
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=False,
-                                obs_delay=False)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=0,
-                sup_observation_delay=1,
-                min_action_delay=1,
-                sup_action_delay=2),
-)
-
-Dac_od12noh_ad12noh = partial(  # constant act and obs delay: 1, 1, no one-hot
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=False,
-                                obs_delay=False)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=1,
-                sup_observation_delay=2,
-                min_action_delay=1,
-                sup_action_delay=2),
-)
-
-Dac_od23noh_ad23noh = partial(  # constant act and obs delay: 2, 2, no one-hot
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=False,
-                                obs_delay=False)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=2,
-                sup_observation_delay=3,
-                min_action_delay=2,
-                sup_action_delay=3),
-)
-
-Dac_od02oh_ad02oh = partial(  # random act and obs delay: 0-1, 0-1, both one-hot
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=True,
-                                obs_delay=True)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=0,
-                sup_observation_delay=2,
-                min_action_delay=0,
-                sup_action_delay=2),
-)
-
-Dac_od03oh_ad03oh = partial(  # random act and obs delay: 0-2, 0-2, both one-hot
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=True,
-                                obs_delay=True)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=0,
-                sup_observation_delay=3,
-                min_action_delay=0,
-                sup_action_delay=3),
-)
-
-Dac_od13oh_ad08oh = partial(  # random act and obs delay: 1-2, 0-7, both one-hot
-    Training,
-    Agent=partial(Agent,
-                  batchsize=128,
-                  Model=partial(Mlp,
-                                act_delay=True,
-                                obs_delay=True)),
-    Env=partial(RandomDelayEnv,
-                id="Pendulum-v0",
-                min_observation_delay=1,
-                sup_observation_delay=3,
-                min_action_delay=0,
-                sup_action_delay=8),
-)
-
 
 if __name__ == "__main__":
     from agents import run
