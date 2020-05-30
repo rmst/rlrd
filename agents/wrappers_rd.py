@@ -22,6 +22,7 @@ class RandomDelayWrapper(gym.Wrapper):
 
     def __init__(self, env, obs_delay_range=range(0, 8), act_delay_range=range(0, 2), instant_rewards: bool = False, initial_action=None, skip_initial_actions=False):
         super().__init__(env)
+        self.wrapped_env = env
         self.instant_rewards = instant_rewards
         self.obs_delay_range = obs_delay_range
         self.act_delay_range = act_delay_range
