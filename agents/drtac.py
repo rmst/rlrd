@@ -307,7 +307,7 @@ DelayedSacTraining = partial(
             agents.sac_models_rd.Mlp,
             act_delay=True,
             obs_delay=True),
-        OutputNorm=partial(beta=0.),
+        OutputNorm=partial(beta=0., zero_debias=False),
     ),
     Env=partial(
         RandomDelayEnv,
