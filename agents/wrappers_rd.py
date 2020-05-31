@@ -23,7 +23,7 @@ class RandomDelayWrapper(gym.Wrapper):
     def __init__(self, env, obs_delay_range=range(0, 8), act_delay_range=range(0, 2), instant_rewards: bool = False, initial_action=None, skip_initial_actions=False):
         super().__init__(env)
         self.wrapped_env = env
-        self.instant_rewards = instant_rewards
+        assert not instant_rewards, 'instant_rewards is depreciated. it was an ill-defined concept'
         self.obs_delay_range = obs_delay_range
         self.act_delay_range = act_delay_range
 
@@ -44,8 +44,12 @@ class RandomDelayWrapper(gym.Wrapper):
         self.t = 0
         self.done_signal_sent = False
         self.current_action = None
+        self.cum_rew_actor = 0.
+        self.cum_rew_brain = 0.
 
     def reset(self, **kwargs):
+        self.cum_rew_actor = 0.
+        self.cum_rew_brain = 0.
         self.done_signal_sent = False
         first_observation = super().reset(**kwargs)
 
@@ -82,19 +86,21 @@ class RandomDelayWrapper(gym.Wrapper):
         if self.t < self.act_delay_range.stop and self.skip_initial_actions:
             # do nothing until the brain's first actions arrive at the remote actor
             self.receive_action()
-            aux = 0, False, {}
         elif self.done_signal_sent:
             # just resend the last observation until the brain gets it
             self.send_observation(self.past_observations[0])
-            aux = 0, False, {}
         else:
-            m, *aux = self.env.step(self.current_action)  # before receive_action: rtrl setting with 0 delays
+            m, r, d, info = self.env.step(self.current_action)  # before receive_action: rtrl setting with 0 delays
             cur_action_age = self.receive_action()
-            self.send_observation((m, *aux, cur_action_age))
+            self.cum_rew_actor += r
+            self.done_signal_sent = d
+            self.send_observation((m, self.cum_rew_actor, d, info, cur_action_age))
 
         # at the brain again
-        m, *delayed_aux = self.receive_observation()
-        aux = aux if self.instant_rewards else delayed_aux
+        m, cum_rew_actor_delayed, d, info = self.receive_observation()
+        r = cum_rew_actor_delayed - self.cum_rew_brain
+        self.cum_rew_brain = cum_rew_actor_delayed
+
         # print("DEBUG: end of step ---")
         # print(f"DEBUG: self.past_actions:{self.past_actions}")
         # print(f"DEBUG: self.past_observations:{self.past_observations}")
@@ -103,7 +109,7 @@ class RandomDelayWrapper(gym.Wrapper):
         # print(f"DEBUG: self.t:{self.t}")
         # print("DEBUG: ---")
         self.t += 1
-        return (m, *aux)
+        return m, r, d, info
 
     def send_action(self, action):
         """

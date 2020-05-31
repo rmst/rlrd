@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import reduce
 
+import pandas
 import torch
 from torch.nn.functional import mse_loss
 
@@ -325,7 +326,8 @@ DelayedSacShortTimesteps = partial(  # works at 2/5 of the original Mujoco times
     Agent=partial(memory_size=2500000, training_steps=2/5, start_training=25000, discount=0.996, entropy_scale=2/5)
 )
 
-
 if __name__ == "__main__":
+    from pandas.plotting import autocorrelation_plot
+
     from agents import run
     run(DrtacTraining)
