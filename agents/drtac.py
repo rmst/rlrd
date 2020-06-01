@@ -9,6 +9,7 @@ import torch
 from torch.nn.functional import mse_loss
 
 import agents.sac
+import agents.sac_undelayed
 from agents.memory import TrajMemoryNoHidden
 from agents.nn import no_grad, exponential_moving_average
 from agents.util import partial
@@ -325,6 +326,29 @@ DelayedSacShortTimesteps = partial(  # works at 2/5 of the original Mujoco times
     steps=5000,
     Agent=partial(memory_size=2500000, training_steps=2/5, start_training=25000, discount=0.996, entropy_scale=2/5)
 )
+
+
+UndelayedSacTraining = partial(
+    Training,
+    Agent=partial(
+        agents.sac_undelayed.Agent,
+        batchsize=128,
+        Model=partial(
+            agents.sac_models_rd.Mlp,
+            act_delay=True,
+            obs_delay=True),
+        OutputNorm=partial(beta=0., zero_debias=False),
+    ),
+    Env=partial(
+        RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=1,
+        min_action_delay=0,
+        sup_action_delay=1,
+    ),
+)
+
 
 if __name__ == "__main__":
     from pandas.plotting import autocorrelation_plot
