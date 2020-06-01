@@ -50,7 +50,9 @@ class Agent:
             # # print_debug(f"self.sup_obs_delay: {self.sup_obs_delay}")
             # # print_debug(f"self.sup_act_delay: {self.sup_act_delay}")
             self.act_buf_size = self.sup_obs_delay + self.sup_act_delay - 1
-        device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        assert self.device is not None
+        device = self.device
         model = self.Model(observation_space, action_space)
         self.model = model.to(device)
         self.model_target = no_grad(deepcopy(self.model))

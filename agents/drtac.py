@@ -43,6 +43,8 @@ class Agent(agents.sac.Agent):
             if self.rtac:
                 # print_debug(f"RTAC FLAG IS TRUE, HISTORY OF SIZE 1")
                 self.act_buf_size = 1
+
+        assert self.device is not None
         device = self.device  # or ("cuda" if torch.cuda.is_available() else "cpu")
         model = self.Model(observation_space, action_space)
         self.model = model.to(device)
