@@ -10,7 +10,7 @@ from agents.envs import RandomDelayEnv
 
 
 class DelayedMlpModule(Module):
-    def __init__(self, observation_space, action_space, is_Q_network, hidden_units: int = 256, obs_delay=True, act_delay=True):  # FIXME: action_space param is useless
+    def __init__(self, observation_space, action_space, is_Q_network, hidden_units: int = 256, obs_delay=True, act_delay=True, tbmdp=False):  # FIXME: action_space param is useless
         """
         Args:
             observation_space:
@@ -36,6 +36,7 @@ class DelayedMlpModule(Module):
         # 	Discrete(act_delay_range.stop),  # action delay int64
         # ))
 
+        self.tbmdp = tbmdp
         self.is_Q_network = is_Q_network
         self.act_delay = act_delay
         self.obs_delay = obs_delay
@@ -47,14 +48,18 @@ class DelayedMlpModule(Module):
         assert self.act_dim == action_space.shape[0], f"action spaces mismatch: {self.act_dim} and {action_space.shape[0]}"
 
         if self.is_Q_network:
-            if self.act_delay and self.obs_delay:
+            if self.tbmdp:
+                self.lin = Linear(self.obs_dim + self.act_dim, hidden_units)
+            elif self.act_delay and self.obs_delay:
                 self.lin = Linear(self.obs_dim + (self.act_dim + 2) * self.buf_size + self.act_dim, hidden_units)
             elif self.act_delay or self.obs_delay:
                 self.lin = Linear(self.obs_dim + (self.act_dim + 1) * self.buf_size + self.act_dim, hidden_units)
             else:
                 self.lin = Linear(self.obs_dim + self.act_dim * self.buf_size + self.act_dim, hidden_units)
         else:
-            if self.act_delay and self.obs_delay:
+            if self.tbmdp:
+                self.lin = Linear(self.obs_dim, hidden_units)
+            elif self.act_delay and self.obs_delay:
                 self.lin = Linear(self.obs_dim + (self.act_dim + 2) * self.buf_size, hidden_units)
             elif self.act_delay or self.obs_delay:
                 self.lin = Linear(self.obs_dim + (self.act_dim + 1) * self.buf_size, hidden_units)
@@ -75,6 +80,15 @@ class DelayedMlpModule(Module):
         # TODO: triple check devices...
 
         obs = x[0]
+
+        if self.tbmdp:
+            input = obs
+            if self.is_Q_network:
+                act = x[4]
+                input = torch.cat((input, act), dim=1)
+            h = self.lin(input)
+            return h
+
         act_buf = torch.cat(x[1], dim=1)
 
         input = torch.cat((obs, act_buf), dim=1)
@@ -98,9 +112,9 @@ class DelayedMlpModule(Module):
 
 
 class MlpActionValue(Sequential):
-    def __init__(self, observation_space, action_space, hidden_units, act_delay=True, obs_delay=True):
+    def __init__(self, observation_space, action_space, hidden_units, act_delay=True, obs_delay=True, tbmdp=False):
         super().__init__(
-            DelayedMlpModule(observation_space, action_space, is_Q_network=True, act_delay=act_delay, obs_delay=obs_delay), ReLU(),
+            DelayedMlpModule(observation_space, action_space, is_Q_network=True, act_delay=act_delay, obs_delay=obs_delay, tbmdp=tbmdp), ReLU(),
             Linear(hidden_units, hidden_units), ReLU(),
             Linear(hidden_units, 2)  # reward and entropy predicted separately
         )
@@ -112,9 +126,9 @@ class MlpActionValue(Sequential):
 
 
 class MlpPolicy(Sequential):
-    def __init__(self, observation_space, action_space, hidden_units, act_delay=True, obs_delay=True):
+    def __init__(self, observation_space, action_space, hidden_units, act_delay=True, obs_delay=True, tbmdp=False):
         super().__init__(
-            DelayedMlpModule(observation_space, action_space, is_Q_network=False, act_delay=act_delay, obs_delay=obs_delay), ReLU(),
+            DelayedMlpModule(observation_space, action_space, is_Q_network=False, act_delay=act_delay, obs_delay=obs_delay, tbmdp=tbmdp), ReLU(),
             Linear(hidden_units, hidden_units), ReLU(),
             TanhNormalLayer(hidden_units, action_space.shape[0])
         )
@@ -125,11 +139,11 @@ class MlpPolicy(Sequential):
 
 
 class Mlp(ActorModule):
-    def __init__(self, observation_space, action_space, hidden_units: int = 256, num_critics: int = 2, act_delay: bool = True, obs_delay: bool = True):
+    def __init__(self, observation_space, action_space, hidden_units: int = 256, num_critics: int = 2, act_delay: bool = True, obs_delay: bool = True, tbmdp: bool = False):
         super().__init__()
         assert isinstance(observation_space, gym.spaces.Tuple)
-        self.critics = ModuleList(MlpActionValue(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay) for _ in range(num_critics))
-        self.actor = MlpPolicy(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay)
+        self.critics = ModuleList(MlpActionValue(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay, tbmdp=tbmdp) for _ in range(num_critics))
+        self.actor = MlpPolicy(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay, tbmdp=tbmdp)
         self.critic_output_layers = [c[-1] for c in self.critics]
 
 
@@ -144,8 +158,8 @@ if __name__ == "__main__":
         Training,
         epochs=2,
         rounds=10,
-        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=False, obs_delay=False)),
-        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=1, min_action_delay=0, sup_action_delay=1),  # RTRL setting, should get roughly the same behavior as SAC in RTRL
+        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=True, obs_delay=True, tbmdp=True)),
+        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=2, min_action_delay=0, sup_action_delay=2),  # RTRL setting, should get roughly the same behavior as SAC in RTRL
     )
 
     Delayed_Sac_Test2 = partial(
