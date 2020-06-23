@@ -10,6 +10,8 @@ from pandas import DataFrame
 from agents.util import pandas_dict
 from agents.wrappers import StatsWrapper
 
+import pybullet_envs
+
 
 class Test:
     def __init__(self, actor, workers: int = 1, number: int = 1, device: str = 'cpu', **kwargs):
