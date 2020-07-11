@@ -24,7 +24,7 @@ setup(
         'pandas',
         'gym',
         'pyyaml',
-        'pybullet'
+        # 'pybullet'
         # 'line_profiler',
     ],
     extras_require={
