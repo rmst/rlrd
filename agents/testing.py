@@ -10,7 +10,7 @@ from pandas import DataFrame
 from agents.util import pandas_dict
 from agents.wrappers import StatsWrapper
 
-import pybullet_envs
+# import pybullet_envs
 
 
 class Test:
