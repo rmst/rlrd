@@ -60,7 +60,7 @@ class RandomDelayWrapper(gym.Wrapper):
         while self.t < 0:
             act = self.action_space.sample() if self.initial_action is None else self.initial_action
             self.send_action(act, init=True)  # TODO : initialize this better
-            self.send_observation((first_observation, 0., False, {}, 0, 1))  # FIXME: this initialization is bugged for delays right now
+            self.send_observation((first_observation, 0., False, {}, 0, 1))  # TODO : initialize this better
             self.t += 1
         self.receive_action()  # an action has to be applied
 
@@ -183,9 +183,9 @@ class UnseenRandomDelayWrapper(RandomDelayWrapper):
         self.observation_space = env.observation_space
 
     def reset(self, **kwargs):
-        t = super().reset(**kwargs)  # t: (m, tuple(self.past_actions), alpha, beta, kappa)
+        t = super().reset(**kwargs)  # t: (m, tuple(self.past_actions), alpha, kappa, beta)
         return t[0]
 
     def step(self, action):
-        t, *aux = super().step(action)  # t: (m, tuple(self.past_actions), alpha, beta, kappa)
+        t, *aux = super().step(action)  # t: (m, tuple(self.past_actions), alpha, kappa, beta)
         return (t[0], *aux)
