@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import reduce
 
-# import pandas
+import pandas
 import torch
 from torch.nn.functional import mse_loss
 
@@ -21,7 +21,7 @@ from agents import Training
 
 
 def print_debug(st):
-    # return
+    return
     print("DEBUG: " + st)
 
 
@@ -36,15 +36,13 @@ class Agent(agents.sac.Agent):
             observation_space, action_space = env.observation_space, env.action_space
             self.sup_obs_delay = env.obs_delay_range.stop
             self.sup_act_delay = env.act_delay_range.stop
-            self.act_buf_size = self.sup_obs_delay + self.sup_act_delay - 1  # - 1 because self.sup_act_delay is actually kappa max, whereas self.sup_obs_delay is alpha max + 1
+            # print_debug(f"self.sup_obs_delay: {self.sup_obs_delay}")
+            # print_debug(f"self.sup_act_delay: {self.sup_act_delay}")
+            self.act_buf_size = self.sup_obs_delay + self.sup_act_delay - 1  # - 1 because self.sup_act_delay is actually max_act_delay as defined in the paper (self.sup_obs_delay is max_obs_delay+1)
             self.old_act_buf_size = deepcopy(self.act_buf_size)
             if self.rtac:
                 # print_debug(f"RTAC FLAG IS TRUE, HISTORY OF SIZE 1")
                 self.act_buf_size = 1
-            # print_debug(f"self.sup_obs_delay (post init): {self.sup_obs_delay}")
-            # print_debug(f"self.sup_act_delay (post init): {self.sup_act_delay}")
-            # print_debug(f"self.act_buf_size (post init): {self.act_buf_size}")
-            # print_debug(f"self.old_act_buf_size (post init): {self.old_act_buf_size}")
 
         assert self.device is not None
         device = self.device  # or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -84,37 +82,28 @@ class Agent(agents.sac.Agent):
         values = [c(augm_obs_traj[0]).squeeze() for c in self.model.critics]
         # print_debug(f"values: {values}")
 
-        # print_debug(f"self.act_buf_size:{self.act_buf_size}")
-        # print_debug(f"self.old_act_buf_size:{self.old_act_buf_size}")
-
-        # nstep_len is the number of valid transitions of the sampled sub-trajectory, not counting the first one which is always valid since we consider kappa (paper definition) to be always >= 1.
-        # Note that in our implementation/gym wrapper compared to the paper, kappa_implementation = kappa_paper - 1
-        # Similarly, beta_implementation = beta_paper - 1
-        # nstep_len will be e.g. 0 in the rtrl setting (i.e. when alpha=0 and kappa_paper=1, kappa_implementation=0, beta_paper=2, beta_implementation=1).
-
+        # to determine the length of the n-step backup, nstep_len is the time at which the currently computed action (== i) or any action that followed (< i) has been applied first:
+        # when nstep_len is k (in 0..self.act_buf_size-1), it means that the action computed with the first augmented observation of the trajectory will have an effect k+1 steps later
+        # (either it will be applied, or an action that follows it will be applied)
         int_tens_type = obs_del = augm_obs_traj[0][2].dtype
         ones_tens = torch.ones(batch_size, device=self.device, dtype=int_tens_type, requires_grad=False)
 
         if not self.rtac:
-            # nstep_len = ones_tens * self.act_buf_size  # old algo was checking for delays longer than the action buffer
-            nstep_len = ones_tens * (self.act_buf_size - 1)
+            nstep_len = ones_tens * self.act_buf_size
             for i in reversed(range(self.act_buf_size)):  # caution: we don't care about the delay of the first observation in the trajectory, but we care about the last one
-                obs_del = augm_obs_traj[i + 1][2]  # alpha
-                act_del = augm_obs_traj[i + 1][4]  # beta (new defintion ; the element at idx 3 is kappa (old definition of beta))
+                obs_del = augm_obs_traj[i + 1][2]
+                act_del = augm_obs_traj[i + 1][3]
                 tot_del = obs_del + act_del
                 # print_debug(f"i + 1: {i + 1}")
                 # print_debug(f"obs_del: {obs_del}")
                 # print_debug(f"act_del: {act_del}")
                 # print_debug(f"tot_del: {tot_del}")
                 # print_debug(f"nstep_len before: {nstep_len}")
-                # nstep_len = torch.where((tot_del <= i) & (tot_del < nstep_len), ones_tens * i, nstep_len)  # old rule (with kappa instead of beta)
-                # TODO: the last iteration is useless
-                nstep_len = torch.where((tot_del <= i), ones_tens * (i - 1), nstep_len)  # new rule (with new definition of beta)  # FIXME: check that this works as expected
+                nstep_len = torch.where((tot_del <= i) & (tot_del < nstep_len), ones_tens * i, nstep_len)
                 # print_debug(f"nstep_len after: {nstep_len}")
+            # print_debug(f"nstep_len: {nstep_len}")
             nstep_max_len = torch.max(nstep_len)
-            nstep_min_len = torch.min(nstep_len)  # TODO: this is only used in the following assert (for debugging), remove if we don't want to check this in the future
-            assert nstep_min_len >= 0, "Each total delay must be at least 1 (instantaneous turn-based RL not supported)"
-            # assert nstep_max_len < self.act_buf_size, "Delays longer than the action buffer (e.g. infinite) are not supported"  # this assert won't work anymore: if delays are longer than the action buffer, then the backup will be peformed on the whole subtrajectory
+            assert nstep_max_len < self.act_buf_size, "Delays longer than the action buffer (e.g. infinite) are not supported"
             # print_debug(f"nstep_max_len: {nstep_max_len}")
             nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
             # print_debug(f"nstep_one_hot: {nstep_one_hot}")
@@ -167,8 +156,6 @@ class Agent(agents.sac.Agent):
         ad_s = torch.stack([self.traj_new_augm_obs[i + 1][3][ibatch] for ibatch, i in enumerate(nstep_len)])
         mod_augm_obs = tuple((obs_s, act_s, od_s, ad_s))
         # print_debug(f"mod_augm_obs: {mod_augm_obs}")
-
-        # assert False
 
         # print_debug(" --- CRITIC LOSS ---")
 
@@ -284,17 +271,16 @@ DrtacTraining = partial(
         sup_observation_delay=1,
         min_action_delay=0,
         sup_action_delay=1),
-    # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
-)
+        # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
+    )
 
 DrtacTest = partial(
     Training,
     Agent=partial(
         Agent,
-        device="cpu",
-        rtac=False,  # set this to True for reverting to RTAC
-        batchsize=4,
-        start_training=50,
+        rtac=True,  # set this to True for reverting to RTAC
+        batchsize=128,
+        start_training=256,
         Model=partial(
             Mlp,
             act_delay=True,
@@ -303,15 +289,15 @@ DrtacTest = partial(
         RandomDelayEnv,
         id="Pendulum-v0",
         min_observation_delay=0,
-        sup_observation_delay=1,
+        sup_observation_delay=2,
         min_action_delay=0,
-        sup_action_delay=1))
+        sup_action_delay=2))
 
 DrtacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
     DrtacTraining,
     Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
     steps=5000,
-    Agent=partial(memory_size=2500000, training_steps=2 / 5, start_training=25000, discount=0.996, entropy_scale=2 / 5)
+    Agent=partial(memory_size=2500000, training_steps=2/5, start_training=25000, discount=0.996, entropy_scale=2/5)
 )
 
 # To compare against SAC:
@@ -340,7 +326,7 @@ DelayedSacShortTimesteps = partial(  # works at 2/5 of the original Mujoco times
     DelayedSacTraining,
     Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
     steps=5000,
-    Agent=partial(memory_size=2500000, training_steps=2 / 5, start_training=25000, discount=0.996, entropy_scale=2 / 5)
+    Agent=partial(memory_size=2500000, training_steps=2/5, start_training=25000, discount=0.996, entropy_scale=2/5)
 )
 
 
@@ -367,7 +353,7 @@ UndelayedSacTraining = partial(
 
 
 if __name__ == "__main__":
-    # from pandas.plotting import autocorrelation_plot
+    from pandas.plotting import autocorrelation_plot
+
     from agents import run
-    run(DrtacTest)
-    # run(DrtacTraining)
+    run(DrtacTraining)
