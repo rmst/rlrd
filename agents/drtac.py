@@ -271,6 +271,7 @@ DrtacTraining = partial(
     Training,
     Agent=partial(
         Agent,
+        device="cuda",
         rtac=False,  # set this to True for reverting to RTAC
         batchsize=128,
         Model=partial(
@@ -283,7 +284,8 @@ DrtacTraining = partial(
         min_observation_delay=0,
         sup_observation_delay=1,
         min_action_delay=0,
-        sup_action_delay=1),
+        sup_action_delay=1,
+        real_world_sampler=0),
     # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
 )
 
@@ -291,9 +293,9 @@ DrtacTest = partial(
     Training,
     Agent=partial(
         Agent,
-        device="cpu",
+        device="cuda",
         rtac=False,  # set this to True for reverting to RTAC
-        batchsize=4,
+        batchsize=128,
         start_training=50,
         Model=partial(
             Mlp,
@@ -305,7 +307,10 @@ DrtacTest = partial(
         min_observation_delay=0,
         sup_observation_delay=1,
         min_action_delay=0,
-        sup_action_delay=1))
+        sup_action_delay=1,
+        real_world_sampler=1),
+    # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
+)
 
 DrtacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
     DrtacTraining,

@@ -5,7 +5,7 @@ import gym
 from gym.wrappers import TimeLimit
 
 from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class
-from agents.wrappers_rd import RandomDelayWrapper
+from agents.wrappers_rd import RandomDelayWrapper, WifiDelayWrapper
 import numpy as np
 import pickle
 from agents.batch_env import get_env_state
@@ -116,7 +116,9 @@ class RandomDelayEnv(Env):
                  min_observation_delay: int = 0,
                  sup_observation_delay: int = 8,
                  min_action_delay: int = 0,  # this is equivalent to a MIN of 1 in the paper
-                 sup_action_delay: int = 2):  # this is equivalent to a MAX of 2 in the paper
+                 sup_action_delay: int = 2,  # this is equivalent to a MAX of 2 in the paper
+                 real_world_sampler: int = 0,  # 0 for uniform, 1 for simple wifi sampler
+                 ):
         env = gym.make(id)
 
         if frame_skip:
@@ -136,7 +138,11 @@ class RandomDelayEnv(Env):
         env = Float64ToFloat32(env)
         assert isinstance(env.action_space, gym.spaces.Box)
         env = NormalizeActionWrapper(env)
-        env = RandomDelayWrapper(env, range(min_observation_delay, sup_observation_delay), range(min_action_delay, sup_action_delay))
+
+        if real_world_sampler == 0:
+            env = RandomDelayWrapper(env, range(min_observation_delay, sup_observation_delay), range(min_action_delay, sup_action_delay))
+        else:
+            env = WifiDelayWrapper(env)
         super().__init__(env)
 
 

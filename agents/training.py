@@ -14,7 +14,7 @@ from agents.wrappers import StatsWrapper
 from agents.envs import GymEnv
 from agents.batch_env import get_env_state
 
-# import pybullet_envs
+import pybullet_envs
 
 
 @dataclass(eq=0)

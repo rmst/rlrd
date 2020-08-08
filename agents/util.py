@@ -176,7 +176,8 @@ def git_info(path=None):
     rev = get_output('git rev-parse HEAD'.split(), cwd=path)
     count = int(get_output('git rev-list HEAD --count'.split(), default='-1', cwd=path))
     status = get_output('git status --short'.split(), cwd=path)  # shows un-committed modified files
-    commit_date = get_output("git show --quiet --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd".split(), cwd=path, env=dict(TZ='UTC'))
+    # commit_date = get_output("git show --quiet --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd".split(), cwd=path, env=dict(TZ='UTC'))
+    commit_date = "0"  # FIXME: hack because didn't work on computecanada for some reason
     desc = get_output(['git', 'describe', '--long', '--tags', '--dirty', '--always', '--match', r'v[0-9]*\.[0-9]*'], cwd=path)
     message = desc + " " + ' '.join(get_output(['git', 'log', '--oneline', '--format=%B', '-n', '1', "HEAD"], cwd=path).splitlines())
 

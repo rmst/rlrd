@@ -5,6 +5,8 @@ import itertools
 import gym
 from gym.spaces import Tuple, Discrete
 
+import numpy as np
+
 
 class RandomDelayWrapper(gym.Wrapper):
     """
@@ -189,3 +191,31 @@ class UnseenRandomDelayWrapper(RandomDelayWrapper):
     def step(self, action):
         t, *aux = super().step(action)  # t: (m, tuple(self.past_actions), alpha, kappa, beta)
         return (t[0], *aux)
+
+
+def simple_wifi_sampler():
+    return np.random.choice([1, 2, 3, 4, 5, 6], p=[0.3082, 0.5927, 0.0829, 0.0075, 0.0031, 0.0056])
+
+
+class WifiDelayWrapper(RandomDelayWrapper):
+    """
+    Simple sampler built from a dataset of 10000 real-world wifi communications
+    The atomic time-step is 0.02s
+    All communication times above 0.1s have been clipped to 0.1s
+        Ideally, they should be considered infinite instead (future work)
+    """
+
+    def __init__(self, env, initial_action=None, skip_initial_actions=False):
+        super().__init__(env, obs_delay_range=range(0, 7), act_delay_range=range(0, 7), initial_action=initial_action, skip_initial_actions=skip_initial_actions)
+
+    def send_observation(self, obs):
+        # at the remote actor
+        alpha = simple_wifi_sampler()
+        self.arrival_times_observations.appendleft(self.t + alpha)
+        self.past_observations.appendleft(obs)
+
+    def send_action(self, action, init=False):
+        # at the brain
+        kappa = simple_wifi_sampler() - 1 if not init else 0  # TODO: change this if we implement a different initialization
+        self.arrival_times_actions.appendleft(self.t + kappa)
+        self.past_actions.appendleft(action)
