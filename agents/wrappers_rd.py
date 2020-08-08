@@ -216,6 +216,6 @@ class WifiDelayWrapper(RandomDelayWrapper):
 
     def send_action(self, action, init=False):
         # at the brain
-        kappa = simple_wifi_sampler() - 1 if not init else 0  # TODO: change this if we implement a different initialization
+        kappa = simple_wifi_sampler() if not init else 0  # TODO: change this if we implement a different initialization
         self.arrival_times_actions.appendleft(self.t + kappa)
         self.past_actions.appendleft(action)
