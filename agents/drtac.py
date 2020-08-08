@@ -305,10 +305,10 @@ DrtacTest = partial(
         RandomDelayEnv,
         id="Pendulum-v0",
         min_observation_delay=0,
-        sup_observation_delay=1,
+        sup_observation_delay=7,
         min_action_delay=0,
-        sup_action_delay=1,
-        real_world_sampler=1),
+        sup_action_delay=7,
+        real_world_sampler=0),
     # possible alternative values for the delays: [(0, 1, 0, 1), (0, 2, 0, 1), (0, 1, 0, 2), (1, 2, 1, 2), (0, 3, 0, 3)]
 )
 
