@@ -28,12 +28,13 @@ class DelayedMlpModule(Module):
         """
         super().__init__()
         assert isinstance(observation_space, gym.spaces.Tuple)
-        # TODO: check that it is actually an instance of:
+        # TODO: check that x is actually in:
         # Tuple((
         # 	obs_space,  # most recent observation
-        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop - 1)),  # action buffer
+        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
         # 	Discrete(obs_delay_range.stop),  # observation delay int64
-        # 	Discrete(act_delay_range.stop),  # action delay int64
+        # 	Discrete(act_delay_range.stop),  # kappa int64
+        #   Discrete(act_delay_range.stop+1),  # beta int64 (not used by the model)
         # ))
 
         self.tbmdp = tbmdp
@@ -73,7 +74,8 @@ class DelayedMlpModule(Module):
         # 	obs_space,  # most recent observation
         # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
         # 	Discrete(obs_delay_range.stop),  # observation delay int64
-        # 	Discrete(act_delay_range.stop),  # action delay int64
+        # 	Discrete(act_delay_range.stop),  # kappa int64
+        #   Discrete(act_delay_range.stop+1),  # beta int64 (not used by the model)
         # ))
 
         # TODO: double check that everything is correct (dims, devices, autograd)
@@ -84,7 +86,7 @@ class DelayedMlpModule(Module):
         if self.tbmdp:
             input = obs
             if self.is_Q_network:
-                act = x[4]
+                act = x[5]
                 input = torch.cat((input, act), dim=1)
             h = self.lin(input)
             return h
@@ -103,7 +105,7 @@ class DelayedMlpModule(Module):
             act_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, act_del.unsqueeze(1), 1.0)
             input = torch.cat((input, act_one_hot), dim=1)
         if self.is_Q_network:
-            act = x[4]
+            act = x[5]
             input = torch.cat((input, act), dim=1)
 
         h = self.lin(input)
@@ -158,8 +160,13 @@ if __name__ == "__main__":
         Training,
         epochs=2,
         rounds=10,
-        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=True, obs_delay=True, tbmdp=True)),
-        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=2, min_action_delay=0, sup_action_delay=2),  # RTRL setting, should get roughly the same behavior as SAC in RTRL
+        steps=100,
+        Agent=partial(Agent,
+                      batchsize=4,
+                      start_training=100,
+                      device='cuda',
+                      Model=partial(Mlp, act_delay=True, obs_delay=True)),
+        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=2, min_action_delay=0, sup_action_delay=1),  # RTRL setting, should get roughly the same behavior as SAC in RTRL
     )
 
     Delayed_Sac_Test2 = partial(

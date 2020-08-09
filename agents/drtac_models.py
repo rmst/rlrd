@@ -58,7 +58,8 @@ class DelayedMlpModule(Module):
         # 	obs_space,  # most recent observation
         # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
         # 	Discrete(obs_delay_range.stop),  # observation delay int64
-        # 	Discrete(act_delay_range.stop),  # action delay int64
+        # 	Discrete(act_delay_range.stop),  # kappa int64
+        #   Discrete(act_delay_range.stop+1),  # beta int64 (not used by the model)
         # ))
 
         # TODO: double check that everything is correct (dims, devices, autograd)

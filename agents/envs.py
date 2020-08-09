@@ -117,8 +117,7 @@ class RandomDelayEnv(Env):
                  sup_observation_delay: int = 8,
                  min_action_delay: int = 0,  # this is equivalent to a MIN of 1 in the paper
                  sup_action_delay: int = 2,  # this is equivalent to a MAX of 2 in the paper
-                 real_world_sampler: int = 0,  # 0 for uniform, 1 for simple wifi sampler
-                 ):
+                 real_world_sampler: int = 0):  # 0 for uniform, 1 for simple wifi sampler
         env = gym.make(id)
 
         if frame_skip:
