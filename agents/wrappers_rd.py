@@ -193,11 +193,15 @@ class UnseenRandomDelayWrapper(RandomDelayWrapper):
         return (t[0], *aux)
 
 
-def simple_wifi_sampler():
+def simple_wifi_sampler1():
     return np.random.choice([1, 2, 3, 4, 5, 6], p=[0.3082, 0.5927, 0.0829, 0.0075, 0.0031, 0.0056])
 
 
-class WifiDelayWrapper(RandomDelayWrapper):
+def simple_wifi_sampler2():
+    return np.random.choice([1, 2, 3, 4], p=[0.3082, 0.5927, 0.0829, 0.0162])
+
+
+class WifiDelayWrapper1(RandomDelayWrapper):
     """
     Simple sampler built from a dataset of 10000 real-world wifi communications
     The atomic time-step is 0.02s
@@ -210,12 +214,36 @@ class WifiDelayWrapper(RandomDelayWrapper):
 
     def send_observation(self, obs):
         # at the remote actor
-        alpha = simple_wifi_sampler()
+        alpha = simple_wifi_sampler1()
         self.arrival_times_observations.appendleft(self.t + alpha)
         self.past_observations.appendleft(obs)
 
     def send_action(self, action, init=False):
         # at the brain
-        kappa = simple_wifi_sampler() if not init else 0  # TODO: change this if we implement a different initialization
+        kappa = simple_wifi_sampler1() if not init else 0  # TODO: change this if we implement a different initialization
+        self.arrival_times_actions.appendleft(self.t + kappa)
+        self.past_actions.appendleft(action)
+
+
+class WifiDelayWrapper2(RandomDelayWrapper):
+    """
+    Simple sampler built from a dataset of 10000 real-world wifi communications
+    The atomic time-step is 0.02s
+    All communication times above 0.1s have been clipped to 0.1s
+        Ideally, they should be considered infinite instead (future work)
+    """
+
+    def __init__(self, env, initial_action=None, skip_initial_actions=False):
+        super().__init__(env, obs_delay_range=range(0, 5), act_delay_range=range(0, 5), initial_action=initial_action, skip_initial_actions=skip_initial_actions)
+
+    def send_observation(self, obs):
+        # at the remote actor
+        alpha = simple_wifi_sampler2()
+        self.arrival_times_observations.appendleft(self.t + alpha)
+        self.past_observations.appendleft(obs)
+
+    def send_action(self, action, init=False):
+        # at the brain
+        kappa = simple_wifi_sampler2() if not init else 0  # TODO: change this if we implement a different initialization
         self.arrival_times_actions.appendleft(self.t + kappa)
         self.past_actions.appendleft(action)

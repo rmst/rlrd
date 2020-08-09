@@ -5,7 +5,7 @@ import gym
 from gym.wrappers import TimeLimit
 
 from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class
-from agents.wrappers_rd import RandomDelayWrapper, WifiDelayWrapper
+from agents.wrappers_rd import RandomDelayWrapper, WifiDelayWrapper1, WifiDelayWrapper2
 import numpy as np
 import pickle
 from agents.batch_env import get_env_state
@@ -140,8 +140,12 @@ class RandomDelayEnv(Env):
 
         if real_world_sampler == 0:
             env = RandomDelayWrapper(env, range(min_observation_delay, sup_observation_delay), range(min_action_delay, sup_action_delay))
+        elif real_world_sampler == 1:
+            env = WifiDelayWrapper1(env)
+        elif real_world_sampler == 2:
+            env = WifiDelayWrapper2(env)
         else:
-            env = WifiDelayWrapper(env)
+            assert False, f"invalid value for real_world_sampler:{real_world_sampler}"
         super().__init__(env)
 
 
