@@ -1,10 +1,8 @@
 import gym
 import torch
-
 from torch.nn import Linear, Sequential, ReLU, ModuleList, Module
 from agents.sac_models import ActorModule
 from agents.nn import TanhNormalLayer
-
 from agents.envs import RandomDelayEnv
 
 
@@ -27,23 +25,13 @@ class DelayedMlpModule(Module):
         """
         super().__init__()
         assert isinstance(observation_space, gym.spaces.Tuple)
-        # TODO: check that it is actually an instance of:
-        # Tuple((
-        # 	obs_space,  # most recent observation
-        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop - 1)),  # action buffer
-        # 	Discrete(obs_delay_range.stop),  # observation delay int64
-        # 	Discrete(act_delay_range.stop),  # action delay int64
-        # ))
-
         self.act_delay = act_delay
         self.obs_delay = obs_delay
-
         self.obs_dim = observation_space[0].shape[0]
         self.buf_size = len(observation_space[1])
         print(f"DEBUG: MLP self.buf_size: {self.buf_size}")
         self.act_dim = observation_space[1][0].shape[0]
         assert self.act_dim == action_space.shape[0], f"action spaces mismatch: {self.act_dim} and {action_space.shape[0]}"
-
         if self.act_delay and self.obs_delay:
             self.lin = Linear(self.obs_dim + (self.act_dim + 2) * self.buf_size, hidden_units)
         elif self.act_delay or self.obs_delay:
@@ -53,23 +41,9 @@ class DelayedMlpModule(Module):
 
     def forward(self, x):
         assert isinstance(x, tuple), f"x is not a tuple: {x}"
-        # TODO: check that x is actually in:
-        # Tuple((
-        # 	obs_space,  # most recent observation
-        # 	Tuple([act_space] * (obs_delay_range.stop + act_delay_range.stop)),  # action buffer
-        # 	Discrete(obs_delay_range.stop),  # observation delay int64
-        # 	Discrete(act_delay_range.stop),  # kappa int64
-        #   Discrete(act_delay_range.stop+1),  # beta int64 (not used by the model)
-        # ))
-
-        # TODO: double check that everything is correct (dims, devices, autograd)
-        # TODO: triple check devices...
-
         obs = x[0]
         act_buf = torch.cat(x[1], dim=1)
-
         input = torch.cat((obs, act_buf), dim=1)
-
         batch_size = obs.shape[0]
         if self.obs_delay:
             obs_del = x[2]
@@ -79,9 +53,7 @@ class DelayedMlpModule(Module):
             act_del = x[3]
             act_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, act_del.unsqueeze(1), 1.0)
             input = torch.cat((input, act_one_hot), dim=1)
-
         h = self.lin(input)
-
         return h
 
 
@@ -161,9 +133,9 @@ if __name__ == "__main__":
 
     print("--- NOW RUNNING: SAC, normal env, normal MLP model, RTRL setting ---")
     run(Sac_Test)
-    print("--- NOW RUNNING: DAC, delayed wrapper, delayed MLP model, RTRL setting ---")
+    print("--- NOW RUNNING: DCAC, delayed wrapper, delayed MLP model, RTRL setting ---")
     run(DAC_Test1)
-    print("--- NOW RUNNING: DAC, delayed wrapper, delayed MLP model, random delays setting, ignoring delays in observations ---")
+    print("--- NOW RUNNING: DCAC, delayed wrapper, delayed MLP model, random delays setting, ignoring delays in observations ---")
     run(DAC_Test2)
-    print("--- NOW RUNNING: DAC, delayed wrapper, delayed MLP model, random delays setting, taking delays into account in observations ---")
+    print("--- NOW RUNNING: DCAC, delayed wrapper, delayed MLP model, random delays setting, taking delays into account in observations ---")
     run(DAC_Test3)

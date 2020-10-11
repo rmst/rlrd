@@ -2,7 +2,6 @@ import numpy as np
 import pickle
 import multiprocessing as mp
 import time
-import torch
 from agents.util import partial
 
 USE_MP = False
@@ -93,11 +92,9 @@ if __name__ == '__main__':
     s = get_env_state(e)
     e_pck = [pickle.dumps(s)] * bs  # serialized envs
 
-
     # dummy policy
     def policy():
         return np.array([[e.action_space.sample() for _ in range(bs)] for _ in range(num_avg)])
-
 
     be = BatchEnv(partial(GymEnv, id='Ant-v2'), batch_size=bs, num_avg=num_avg)
 
