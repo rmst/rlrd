@@ -77,11 +77,11 @@ class Agent(rlrd.sac.Agent):
             nstep_max_len = torch.max(nstep_len)
             nstep_min_len = torch.min(nstep_len)
             assert nstep_min_len >= 0, "Each total delay must be at least 1 (instantaneous turn-based RL not supported)"
-            nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
+            nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1).long(), 1.)
         else:  # RTAC is equivalent to doing only 1-step backups (i.e. nstep_len==0)
             nstep_len = torch.zeros(batch_size, device=self.device, dtype=int_tens_type, requires_grad=False)
             nstep_max_len = torch.max(nstep_len)
-            nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1), 1.)
+            nstep_one_hot = torch.zeros(len(nstep_len), nstep_max_len + 1, device=self.device, requires_grad=False).scatter_(1, nstep_len.unsqueeze(1).long(), 1.)
             terminals = terminals if self.act_buf_size == 1 else terminals * 0.0  # the way the replay memory works, RTAC will never encounter terminal states for buffers of more than 1 action
 
         # use the current policy to compute a new trajectory of actions of length self.act_buf_size

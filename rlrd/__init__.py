@@ -97,7 +97,7 @@ def run_fs(path: str, run_cls: type = Training):
 
 DcacTest = partial(
     Training,
-    epochs=5,
+    epochs=1,
     rounds=5,
     steps=1000,
     Agent=partial(
@@ -151,7 +151,7 @@ DcacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
 # To compare against SAC:
 DelayedSacTest = partial(
     Training,
-    epochs=5,
+    epochs=1,
     rounds=5,
     steps=1000,
     Agent=partial(

@@ -98,11 +98,11 @@ class DelayedMlpModule(Module):
         batch_size = obs.shape[0]
         if self.obs_delay:
             obs_del = x[2]
-            obs_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, obs_del.unsqueeze(1), 1.0)
+            obs_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, obs_del.unsqueeze(1).long(), 1.0)
             input = torch.cat((input, obs_one_hot), dim=1)
         if self.act_delay:
             act_del = x[3]
-            act_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, act_del.unsqueeze(1), 1.0)
+            act_one_hot = torch.zeros(batch_size, self.buf_size, device=input.device).scatter_(1, act_del.unsqueeze(1).long(), 1.0)
             input = torch.cat((input, act_one_hot), dim=1)
         if self.is_Q_network:
             act = x[5]
