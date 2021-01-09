@@ -1,79 +1,67 @@
-# Agents
+# RLRD
 
-Reinforcement Learning Agents in Pytorch
+[Reinforcement Learning with Random Delays](https://arxiv.org/abs/2010.02966) in Pytorch
 
 ### Getting Started
-This repo can be pip-installed via
+This repository can be pip-installed via:
 ```bash
-pip install git+https://github.com/rmst/agents.git
+pip install git+https://github.com/yannbouteiller/rlrd.git
 ```
 
-To train an RTAC agent on the basic `Pendulum-v0` task run
+DCAC can be run on a simple 1-step delayed `Pendulum-v0` task via:
 ```bash
-python -m agents run agents:RtacTraining Env.id=Pendulum-v0
+python -m rlrd run rlrd:DcacTraining Env.id=Pendulum-v0
 ```
 
+Many optional hyperparameters can be set via command line. For instance:
+```bash
+python -m rlrd run rlrd:DcacTraining \
+Env.id=Pendulum-v0 \
+Env.min_observation_delay=0 \
+Env.sup_observation_delay=2 \
+Env.min_action_delay=0 \
+Env.sup_action_delay=3 \
+Agent.batchsize=128 \
+Agent.memory_size=1000000 \
+Agent.lr=0.0003 \
+Agent.discount=0.99 \
+Agent.target_update=0.005 \
+Agent.reward_scale=5.0 \
+Agent.entropy_scale=1.0 \
+Agent.start_training=10000 \
+Agent.device=cuda \
+Agent.training_steps=1.0 \
+Agent.loss_alpha=0.2 \
+Agent.Model.hidden_units=256 \
+Agent.Model.num_critics=2
+```
+
+Note that our gym wrapper adds a constant 1-step delay to the action delay, i.e. ```Env.min_action_delay=0``` actually means that the minimum action delay is 1 whereas ```Env.min_observation_delay=0``` means that the minimum observation delay is 0 (we assume that the action delay cannot be less than 1 time-step, e.g. for action inference).
+For instance:
+- ```Env.min_observation_delay=0 Env.sup_observation_delay=2``` means that the observation delay is randomly 0 or 1.
+- ```Env.min_action_delay=0 Env.sup_action_delay=2``` means that the action delay is randomly 1 or 2.
+- ```Env.min_observation_delay=1 Env.sup_observation_delay=2``` means that the observation delay is always 1.
+- ```Env.min_observation_delay=0 Env.sup_observation_delay=3``` means that the observation delay is randomly 0, 1 or 2.
+- etc.
 
 
 ### Mujoco Experiments
-To install Mujoco you follow the instructions at [openai/gym](https://github.com/openai/gym) or have a look at [`our dockerfile`](github.com/rmst/rtrl/blob/master/docker/gym/Dockerfile). The following environments were used in the paper.
+To install Mujoco, follow the instructions at [openai/gym](https://github.com/openai/gym).
+The following environments were used in the paper:
 
 ![MuJoCo](resources/mujoco_horizontal.png)
 
 
-To train an RTAC agent on `HalfCheetah-v2` run
+To train DCAC on `HalfCheetah-v2` run:
 ```bash
-python -m agents run agents:RtacTraining Env.id=HalfCheetah-v2
+python -m rlrd run rlrd:DcacTraining Env.id=HalfCheetah-v2
 ```
 
-To train a SAC agent on `Ant-v2` with a real-time wrapper (i.e. RTMDP in the paper) run
+To SAC agent on `Ant-v2` run:
 ```bash
-python -m agents run agents:SacTraining Env.id=Ant-v2 Env.real_time=True
+python -m rlrd run rlrd:DelayedSacTraining Env.id=HalfCheetah-v2
 ```
 
-### Avenue Experiments
-Avenue [(Ibrahim et al., 2019)](https://github.com/elementaI/avenue) can be pip-installed via
-```bash
-pip install git+https://github.com/elementai/avenue.git
-```
-<p align="center"><img src="/resources/avenue_collage.png" width=95% /></p>
-
-To train an RTAC agent to drive on a race track (left image) run
-```bash
-python -m agents run agents:RtacAvenueTraining Env.id=RaceSolo-v0
-```
-Note that this requires a lot of resources, especially memory (16GB+).
-
-
-### Storing Stats
-`python -m agents run` just prints stats to stdout. To save stats use the following instead.
-```bash
-python -m agents run-fs experiment-1 agents:RtacTraining Env.id=Pendulum-v0
-```
-Stats are generated and printed every `round` but only saved to disk every `epoch`. The stats will be saved as pickled pandas dataframes in `experiment-1/stats`.
-
-### Checkpointing
-This repo supports checkpointing. Every `epoch` the whole run object (e.g. instances of `agents.training:Training`) is pickled to disk and reloaded. This is to ensure reproducibilty.
-
-You can manually load and inspect pickled run instances with the standard `pickle:load` or the more convenient `agents:load`. For example, to look at the first transition in a SAC agent's replay memory run
-```python
-import agents
-run = agents.load('experiment-1/state')
-print(run.agent.memory[0])
-``` 
-
-
-### Docker
-There is a single Dockerfile that can be used to build images for all experiments. To create the images you can run the following in the root directory.
-```
-# Image with just Pytorch and Gym and Agents (without Mujoco or Avenue)
-DOCKER_BUILDKIT=1 docker build .
-
-# Image with Mujoco
-DOCKER_BUILDKIT=1 docker build . --build-arg GYM_BASE="gym-mujoco" --build-arg MJ_KEY="$(cat $MJKEY_FILE)"
-
-# Image with Avenue
-DOCKER_BUILDKIT=1 docker build . --build-arg CUDA_BASE="cuda-x11" --build-arg GYM_BASE="gym-avenue"
-```
-However, to get GPU rendering going for Avenue there are additional steps that have to be taken.
-
+### Authors
+- Yann Bouteiller
+- Simon Ramstedt
