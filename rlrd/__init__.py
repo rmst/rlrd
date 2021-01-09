@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import tempfile
-import time
 from os.path import exists
 from random import randrange
 from tempfile import mkdtemp
@@ -12,14 +11,13 @@ from tempfile import mkdtemp
 import pandas as pd
 import yaml
 
-from agents.envs import AvenueEnv
-from agents.util import partial, save_json, partial_to_dict, partial_from_dict, load_json, dump, load, git_info
-from agents.training import Training
-import agents.rtac
-import agents.rrtac
-import agents.sac
-import agents.sac_nstep
-import agents.sac_models_rd
+from rlrd.util import partial, save_json, partial_to_dict, partial_from_dict, load_json, dump, load, git_info
+from rlrd.training import Training
+import rlrd.sac
+import rlrd.sac_models_rd
+import rlrd.dcac
+import rlrd.dcac_models
+import rlrd.envs
 
 
 def iterate_episodes(run_cls: type = Training, checkpoint_path: str = None):
@@ -97,77 +95,118 @@ def run_fs(path: str, run_cls: type = Training):
 
 # === specifications ===================================================================================================
 
-TestTraining = partial(
+DcacTest = partial(
     Training,
-    epochs=3,
+    epochs=5,
     rounds=5,
-    steps=10,
-    Agent=partial(memory_size=1000000),
-    Env=partial(id="Pendulum-v0"),
+    steps=1000,
+    Agent=partial(
+        rlrd.dcac.Agent,
+        device="cuda",
+        rtac=False,  # set this to True for reverting to RTAC
+        batchsize=64,
+        start_training=50,
+        Model=partial(
+            rlrd.dcac_models.Mlp,
+            act_delay=True,
+            obs_delay=True)),
+    Env=partial(
+        rlrd.envs.RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=2,
+        min_action_delay=0,
+        sup_action_delay=2,
+        real_world_sampler=0),
 )
 
-SacTraining = partial(
+DcacTraining = partial(
     Training,
-    Agent=partial(agents.sac.Agent),
-    Env=partial(id="Pendulum-v0"),
-    Test=partial(number=1, workers=1),
+    Agent=partial(
+        rlrd.dcac.Agent,
+        device="cuda",
+        rtac=False,  # set this to True for reverting to RTAC
+        batchsize=128,
+        Model=partial(
+            rlrd.dcac_models.Mlp,
+            act_delay=True,
+            obs_delay=True)),
+    Env=partial(
+        rlrd.envs.RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=1,
+        min_action_delay=0,
+        sup_action_delay=1,
+        real_world_sampler=0),
 )
 
-SacDelayTraining = partial(
-    Training,
-    Agent=partial(agents.sac.Agent, Model=agents.sac_models_rd.Mlp),
-    Env=partial(envs.RandomDelayEnv, id="Pendulum-v0", sup_observation_delay=1, sup_action_delay=1),
-    Test=partial(number=1, workers=1),
-)
-
-SacNstepTraining = partial(
-    Training,
-    Agent=partial(agents.sac_nstep.Agent),
-    Env=partial(id="Pendulum-v0", store_env=True),
-    # Test=partial(number=1, workers=1),
-)
-
-RtacTraining = partial(
-    SacTraining,
-    Agent=partial(agents.rtac.Agent),
-    Env=partial(real_time=True),
-    Test=partial(number=1, workers=1),
-)
-
-SacAvenueTraining = partial(
-    Training,
-    epochs=20,
-    rounds=10,
+DcacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
+    DcacTraining,
+    Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
     steps=5000,
-    Agent=partial(agents.sac.AvenueAgent),
-    Env=partial(AvenueEnv, real_time=False),
+    Agent=partial(memory_size=2500000, training_steps=2 / 5, start_training=25000, discount=0.996, entropy_scale=2 / 5)
 )
 
-RtacAvenueTraining = partial(
-    SacAvenueTraining,
-    Agent=partial(agents.rtac.AvenueAgent),
-    Env=partial(real_time=True),
-)
-
-SacAvenueHdTraining = partial(
+# To compare against SAC:
+DelayedSacTest = partial(
     Training,
-    epochs=20,
-    rounds=10,
-    steps=5000,
-    Agent=partial(agents.sac.AvenueAgent, training_steps=1 / 4, batchsize=32, memory_size=100000,
-                  Model=partial(Conv=agents.nn.hd_conv)),
-    Env=partial(AvenueEnv, real_time=0, width=368, height=368),
-    Test=partial(number=0),  # laptop can't handle more than that
+    epochs=5,
+    rounds=5,
+    steps=1000,
+    Agent=partial(
+        rlrd.sac.Agent,
+        device="cuda",
+        batchsize=64,
+        start_training=50,
+        Model=partial(
+            rlrd.sac_models_rd.Mlp,
+            act_delay=True,
+            obs_delay=True),
+        OutputNorm=partial(beta=0., zero_debias=False),
+    ),
+    Env=partial(
+        rlrd.envs.RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=2,
+        min_action_delay=0,
+        sup_action_delay=2,
+    ),
 )
 
-RrtacTraining = partial(
-    SacTraining,
-    Agent=partial(agents.rrtac.Agent, batchsize=32, history_length=8),
-    Env=partial(real_time=True),
-    Test=partial(number=1, workers=1),
+DelayedSacTraining = partial(
+    Training,
+    Agent=partial(
+        rlrd.sac.Agent,
+        batchsize=128,
+        Model=partial(
+            rlrd.sac_models_rd.Mlp,
+            act_delay=True,
+            obs_delay=True),
+        OutputNorm=partial(beta=0., zero_debias=False),
+    ),
+    Env=partial(
+        rlrd.envs.RandomDelayEnv,
+        id="Pendulum-v0",
+        min_observation_delay=0,
+        sup_observation_delay=1,
+        min_action_delay=0,
+        sup_action_delay=1,
+    ),
 )
+
+DelayedSacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
+    DelayedSacTraining,
+    Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
+    steps=5000,
+    Agent=partial(memory_size=2500000, training_steps=2 / 5, start_training=25000, discount=0.996, entropy_scale=2 / 5)
+)
+
 
 # === tests ============================================================================================================
 if __name__ == "__main__":
-    run(TestTraining)
-    # run(RrtacTraining)
+    print("--- Now running SAC: ---")
+    run(DelayedSacTest)
+    print("--- Now running DCAC: ---")
+    run(DcacTest)

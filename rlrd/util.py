@@ -129,7 +129,7 @@ def partial_from_dict(d: dict):
     d = d.copy()
     assert d.pop("__format_version__", "3") == "3"
     d = {k: partial_from_dict(v) if isinstance(v, dict) and FKEY in v else v for k, v in d.items()}
-    func = get_class_or_function(d.pop(FKEY) or "agents.util:default")
+    func = get_class_or_function(d.pop(FKEY) or "dcac_python.util:default")
     return partial(func, **d)
 
 
@@ -241,7 +241,7 @@ class DelayInterrupt:
         [signal.signal(s, self.on_signal) for s in self.signals]
 
     def on_signal(self, *args):
-        print("agents.util:DelayInterrupt -- Signal received!", *args)
+        print("dcac_python.util:DelayInterrupt -- Signal received!", *args)
         self.signal_received = True
 
     def __exit__(self, *args):

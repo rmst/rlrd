@@ -7,8 +7,8 @@ import torch
 import pandas as pd
 from pandas import DataFrame
 
-from agents.util import pandas_dict
-from agents.wrappers import StatsWrapper
+from rlrd.util import pandas_dict
+from rlrd.wrappers import StatsWrapper
 
 # import pybullet_envs
 

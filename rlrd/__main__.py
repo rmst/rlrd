@@ -1,14 +1,14 @@
 """A simple command line interface
 
-Usage: `python -m agents run agents:RtacTraining Env.id=Pendulum-v0`
+Usage: `python -m dcac_python run dcac_python:RtacTraining Env.id=Pendulum-v0`
 
-or `python -m agents run-fs agents-checkpoint-0 agents:RtacTraining Env.id=Pendulum-v0`
+or `python -m dcac_python run-fs dcac_python-checkpoint-0 dcac_python:RtacTraining Env.id=Pendulum-v0`
 """
 
 import sys
 
-from agents import *
-from agents.util import partial_from_args
+from rlrd import *
+from rlrd.util import partial_from_args
 
 _, cmd, *args = sys.argv
 

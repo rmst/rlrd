@@ -4,11 +4,11 @@ from dataclasses import dataclass, InitVar
 import gym
 from gym.wrappers import TimeLimit
 
-from agents.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class
-from agents.wrappers_rd import RandomDelayWrapper, WifiDelayWrapper1, WifiDelayWrapper2
+from rlrd.wrappers import Float64ToFloat32, TimeLimitResetWrapper, NormalizeActionWrapper, RealTimeWrapper, TupleObservationWrapper, AffineObservationWrapper, AffineRewardWrapper, PreviousActionWrapper, FrameSkip, get_wrapper_by_class
+from rlrd.wrappers_rd import RandomDelayWrapper, WifiDelayWrapper1, WifiDelayWrapper2
 import numpy as np
 import pickle
-from agents.batch_env import get_env_state
+from rlrd.batch_env import get_env_state
 
 
 def mujoco_py_issue_424_workaround():
@@ -84,31 +84,6 @@ class GymEnv(Env):
         # self.seed(seed_val)
 
 
-class AvenueEnv(Env):
-    def __init__(self, seed_val=0, id: str = "RaceSolo-v0", real_time: bool = False, width: int = 256, height: int = 64):
-        import avenue
-        env = avenue.make(id, width=width, height=height)
-        assert isinstance(env.action_space, gym.spaces.Box)
-        env = NormalizeActionWrapper(env)
-        if real_time:
-            env = RealTimeWrapper(env)
-        else:
-            # Avenue environments are non-markovian. We don't want to give real-time methods an advantage by having the past action as part of it's state while non-real-time methods have not. I.e. we add the past action to the state below.
-            env = PreviousActionWrapper(env)
-        super().__init__(env)
-
-        # bring images into right format: batch x channels x height x width
-        (img_sp, vec_sp), *more = env.observation_space
-        img_sp = gym.spaces.Box(img_sp.low.transpose(2, 0, 1), img_sp.high.transpose(2, 0, 1), dtype=img_sp.dtype)
-        self.observation_space = gym.spaces.Tuple((gym.spaces.Tuple((img_sp, vec_sp)), *more))
-
-    # self.seed(seed_val)
-
-    def observation(self, observation):
-        (img, vec), *more = observation
-        return ((img.transpose(2, 0, 1), vec), *more)
-
-
 class RandomDelayEnv(Env):
     def __init__(self,
                  seed_val=0, id: str = "Pendulum-v0",
@@ -117,7 +92,7 @@ class RandomDelayEnv(Env):
                  sup_observation_delay: int = 8,
                  min_action_delay: int = 0,  # this is equivalent to a MIN of 1 in the paper
                  sup_action_delay: int = 2,  # this is equivalent to a MAX of 2 in the paper
-                 real_world_sampler: int = 0):  # 0 for uniform, 1 for simple wifi sampler
+                 real_world_sampler: int = 0):  # 0 for uniform, 1 or 2 for simple wifi sampler
         env = gym.make(id)
 
         if frame_skip:
@@ -147,15 +122,6 @@ class RandomDelayEnv(Env):
         else:
             assert False, f"invalid value for real_world_sampler:{real_world_sampler}"
         super().__init__(env)
-
-
-def test_avenue():
-    env = AvenueEnv(id="CityPedestrians-v0")
-    env.reset()
-    [env.step(env.action_space.sample()) for _ in range(1000)]
-    (img,), _, _, _ = env.step(env.action_space.sample())
-    assert img == 3
-    print('done')
 
 
 def test_random_delay_env():

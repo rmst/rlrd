@@ -5,9 +5,9 @@ import torch
 import numpy as np
 from torch.nn.functional import leaky_relu
 
-from agents.util import collate, partition
+from rlrd.util import collate, partition
 from torch.nn import Linear, Sequential, ReLU, ModuleList, Module
-from agents.nn import TanhNormalLayer, SacLinear, big_conv
+from rlrd.nn import TanhNormalLayer, SacLinear, big_conv
 
 
 class ActorModule(Module):
@@ -144,9 +144,3 @@ class ConvModel(ActorModule):
         self.actor = ConvActor(observation_space, action_space, hidden_units, Conv)
         self.critics = ModuleList(ConvCritic(observation_space, action_space, hidden_units, Conv) for _ in range(num_critics))
         self.critic_output_layers = sum((c.critic_output_layers for c in self.critics), ())
-
-
-# === Testing ==========================================================================================================
-class TestMlp(ActorModule):
-    def act(self, state, obs, r, done, info, train=False):
-        return obs.copy(), state, {}

@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 import multiprocessing as mp
 import time
-from agents.util import partial
+from rlrd.util import partial
 
 USE_MP = False
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     num_avg = 8
     num_steps = 20
 
-    from agents.envs import GymEnv
+    from rlrd.envs import GymEnv
 
     e = GymEnv(id='Ant-v2')
     e.reset()

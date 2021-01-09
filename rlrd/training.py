@@ -1,18 +1,18 @@
-from copy import deepcopy
-import pickle
+# from copy import deepcopy
+# import pickle
 from dataclasses import dataclass
 
 import pandas as pd
-import numpy as np
+# import numpy as np
 from pandas import DataFrame, Timestamp
 
-import agents.sac
+import rlrd.sac
 
-from agents.testing import Test
-from agents.util import pandas_dict, cached_property
-from agents.wrappers import StatsWrapper
-from agents.envs import GymEnv
-from agents.batch_env import get_env_state
+from rlrd.testing import Test
+from rlrd.util import pandas_dict, cached_property
+from rlrd.wrappers import StatsWrapper
+from rlrd.envs import GymEnv
+# from dcac_python.batch_env import get_env_state
 
 # import pybullet_envs
 
@@ -21,7 +21,7 @@ from agents.batch_env import get_env_state
 class Training:
     Env: type = GymEnv
     Test: type = Test
-    Agent: type = agents.sac.Agent
+    Agent: type = rlrd.sac.Agent
     epochs: int = 10  # total number of epochs, we save the agent every epoch
     rounds: int = 50  # number of rounds per epoch, we generate statistics every round
     steps: int = 2000  # number of steps per round, one step = environment step
@@ -39,7 +39,7 @@ class Training:
 
         with StatsWrapper(self.Env(seed_val=self.seed + self.epoch), window=self.stats_window or self.steps) as env:
             for rnd in range(self.rounds):
-                print(f"=== epoch {self.epoch}/{self.epochs} ".ljust(20, '=') + f" round {rnd}/{self.rounds} ".ljust(50, '='))
+                print(f"=== epoch {self.epoch + 1}/{self.epochs} ".ljust(20, '=') + f" round {rnd + 1}/{self.rounds} ".ljust(50, '='))
 
                 t0 = pd.Timestamp.utcnow()
                 stats_training = []

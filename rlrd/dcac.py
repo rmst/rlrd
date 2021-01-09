@@ -5,18 +5,17 @@ from dataclasses import dataclass
 from functools import reduce
 import torch
 from torch.nn.functional import mse_loss
-import agents.sac
-import agents.sac_undelayed
-from agents.memory import TrajMemoryNoHidden
-from agents.nn import no_grad, exponential_moving_average
-from agents.util import partial
-from agents.drtac_models import Mlp
-from agents.envs import RandomDelayEnv
-from agents import Training
+import rlrd.sac
+from rlrd.memory import TrajMemoryNoHidden
+from rlrd.nn import no_grad, exponential_moving_average
+from rlrd.util import partial
+from rlrd.dcac_models import Mlp
+from rlrd.envs import RandomDelayEnv
+from rlrd import Training
 
 
 @dataclass(eq=0)
-class Agent(agents.sac.Agent):
+class Agent(rlrd.sac.Agent):
     Model: type = Mlp
     loss_alpha: float = 0.2
     rtac: bool = False
@@ -158,8 +157,9 @@ class Agent(agents.sac.Agent):
         loss_total.backward()
         self.optimizer.step()
 
-        # update target model and normalizers
+        # update target model
         exponential_moving_average(self.model_target.parameters(), self.model.parameters(), self.target_update)
+
         # exponential_moving_average(self.outputnorm_target.parameters(), self.outputnorm.parameters(), self.target_update)  # this is for trying PopArt in the future
 
         return dict(
@@ -168,89 +168,3 @@ class Agent(agents.sac.Agent):
             loss_actor=loss_actor.detach(),
             memory_size=len(self.memory),
         )
-
-
-DrtacTraining = partial(
-    Training,
-    Agent=partial(
-        Agent,
-        device="cuda",
-        rtac=False,  # set this to True for reverting to RTAC
-        batchsize=128,
-        Model=partial(
-            Mlp,
-            act_delay=True,
-            obs_delay=True)),
-    Env=partial(
-        RandomDelayEnv,
-        id="Pendulum-v0",
-        min_observation_delay=0,
-        sup_observation_delay=1,
-        min_action_delay=0,
-        sup_action_delay=1,
-        real_world_sampler=0),
-)
-
-DrtacTest = partial(
-    Training,
-    Agent=partial(
-        Agent,
-        device="cuda",
-        rtac=False,  # set this to True for reverting to RTAC
-        batchsize=128,
-        start_training=50,
-        Model=partial(
-            Mlp,
-            act_delay=True,
-            obs_delay=True)),
-    Env=partial(
-        RandomDelayEnv,
-        id="Pendulum-v0",
-        min_observation_delay=0,
-        sup_observation_delay=4,
-        min_action_delay=0,
-        sup_action_delay=4,
-        real_world_sampler=2),
-)
-
-DrtacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
-    DrtacTraining,
-    Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
-    steps=5000,
-    Agent=partial(memory_size=2500000, training_steps=2 / 5, start_training=25000, discount=0.996, entropy_scale=2 / 5)
-)
-
-# To compare against SAC:
-DelayedSacTraining = partial(
-    Training,
-    Agent=partial(
-        agents.sac.Agent,
-        batchsize=128,
-        Model=partial(
-            agents.sac_models_rd.Mlp,
-            act_delay=True,
-            obs_delay=True),
-        OutputNorm=partial(beta=0., zero_debias=False),
-    ),
-    Env=partial(
-        RandomDelayEnv,
-        id="Pendulum-v0",
-        min_observation_delay=0,
-        sup_observation_delay=1,
-        min_action_delay=0,
-        sup_action_delay=1,
-    ),
-)
-
-DelayedSacShortTimesteps = partial(  # works at 2/5 of the original Mujoco timescale
-    DelayedSacTraining,
-    Env=partial(frame_skip=2),  # only works with Mujoco tasks (for now)
-    steps=5000,
-    Agent=partial(memory_size=2500000, training_steps=2 / 5, start_training=25000, discount=0.996, entropy_scale=2 / 5)
-)
-
-
-if __name__ == "__main__":
-    from agents import run
-    run(DrtacTest)
-    # run(DrtacTraining)

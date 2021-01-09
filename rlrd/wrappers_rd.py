@@ -206,7 +206,6 @@ class WifiDelayWrapper1(RandomDelayWrapper):
     Simple sampler built from a dataset of 10000 real-world wifi communications
     The atomic time-step is 0.02s
     All communication times above 0.1s have been clipped to 0.1s
-        Ideally, they should be considered infinite instead (future work)
     """
 
     def __init__(self, env, initial_action=None, skip_initial_actions=False):
@@ -230,7 +229,6 @@ class WifiDelayWrapper2(RandomDelayWrapper):
     Simple sampler built from a dataset of 10000 real-world wifi communications
     The atomic time-step is 0.02s
     All communication times above 0.1s have been clipped to 0.1s
-        Ideally, they should be considered infinite instead (future work)
     """
 
     def __init__(self, env, initial_action=None, skip_initial_actions=False):

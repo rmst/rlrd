@@ -1,9 +1,9 @@
 import gym
 import torch
 from torch.nn import Linear, Sequential, ReLU, ModuleList, Module
-from agents.sac_models import ActorModule
-from agents.nn import TanhNormalLayer
-from agents.envs import RandomDelayEnv
+from rlrd.sac_models import ActorModule
+from rlrd.nn import TanhNormalLayer
+from rlrd.envs import RandomDelayEnv
 
 
 class DelayedMlpModule(Module):
@@ -29,7 +29,7 @@ class DelayedMlpModule(Module):
         self.obs_delay = obs_delay
         self.obs_dim = observation_space[0].shape[0]
         self.buf_size = len(observation_space[1])
-        print(f"DEBUG: MLP self.buf_size: {self.buf_size}")
+        # print(f"DEBUG: MLP self.buf_size: {self.buf_size}")
         self.act_dim = observation_space[1][0].shape[0]
         assert self.act_dim == action_space.shape[0], f"action spaces mismatch: {self.act_dim} and {action_space.shape[0]}"
         if self.act_delay and self.obs_delay:
@@ -90,52 +90,3 @@ class Mlp(ActorModule):
         self.critics = ModuleList(MlpStateValue(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay) for _ in range(num_critics))
         self.actor = MlpPolicy(observation_space, action_space, hidden_units, act_delay=act_delay, obs_delay=obs_delay)
         self.critic_output_layers = [c[-1] for c in self.critics]
-
-
-# === Testing ==========================================================================================================
-
-if __name__ == "__main__":
-    from agents import Training, run
-    from agents.util import partial
-    from agents.drtac import Agent
-
-    DAC_Test1 = partial(
-        Training,
-        epochs=2,
-        rounds=10,
-        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=False, obs_delay=False)),
-        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=1, min_action_delay=0, sup_action_delay=1),  # RTRL setting, should get roughly the same behavior as SAC in RTRL
-    )
-
-    DAC_Test2 = partial(
-        Training,
-        epochs=2,
-        rounds=10,
-        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=False, obs_delay=False)),  # random delay information in obs ignored by model
-        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=8, min_action_delay=0, sup_action_delay=2),  # random delays
-    )
-
-    DAC_Test3 = partial(
-        Training,
-        epochs=2,
-        rounds=10,
-        Agent=partial(Agent, device='cuda', Model=partial(Mlp, act_delay=True, obs_delay=True)),  # random delay information in obs taken into account by model
-        Env=partial(RandomDelayEnv, min_observation_delay=0, sup_observation_delay=8, min_action_delay=0, sup_action_delay=2),  # random delays
-    )
-
-    Sac_Test = partial(
-        Training,
-        epochs=2,
-        rounds=10,
-        Agent=partial(Agent, device='cuda'),
-        Env=partial(id="Pendulum-v0", real_time=True),
-    )
-
-    print("--- NOW RUNNING: SAC, normal env, normal MLP model, RTRL setting ---")
-    run(Sac_Test)
-    print("--- NOW RUNNING: DCAC, delayed wrapper, delayed MLP model, RTRL setting ---")
-    run(DAC_Test1)
-    print("--- NOW RUNNING: DCAC, delayed wrapper, delayed MLP model, random delays setting, ignoring delays in observations ---")
-    run(DAC_Test2)
-    print("--- NOW RUNNING: DCAC, delayed wrapper, delayed MLP model, random delays setting, taking delays into account in observations ---")
-    run(DAC_Test3)

@@ -8,7 +8,7 @@ from torch.nn import Module
 from torch.nn.init import kaiming_uniform_, xavier_uniform_, calculate_gain
 from torch.nn.parameter import Parameter
 
-from agents import partial
+from rlrd import partial
 
 
 def detach(x):

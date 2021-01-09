@@ -1,6 +1,6 @@
 from collections import deque
 from random import randint
-from agents.util import collate
+from rlrd.util import collate
 
 
 class Memory:
