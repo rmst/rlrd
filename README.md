@@ -5,7 +5,7 @@
 ### Getting Started
 This repository can be pip-installed via:
 ```bash
-pip install git+https://github.com/yannbouteiller/rlrd.git
+pip install git+https://github.com/rmst/rlrd.git
 ```
 
 DCAC can be run on a simple 1-step delayed `Pendulum-v0` task via:
