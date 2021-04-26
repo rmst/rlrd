@@ -8,7 +8,7 @@ This repository can be pip-installed via:
 pip install git+https://github.com/rmst/rlrd.git
 ```
 
-DCAC can be run on a simple 1-step delayed `Pendulum-v0` task via:
+DC/AC can be run on a simple 1-step delayed `Pendulum-v0` task via:
 ```bash
 python -m rlrd run rlrd:DcacTraining Env.id=Pendulum-v0
 ```
@@ -52,16 +52,45 @@ The following environments were used in the paper:
 ![MuJoCo](resources/mujoco_horizontal.png)
 
 
-To train DCAC on `HalfCheetah-v2` run:
+To train DC/AC on a 1-step delayed version of `HalfCheetah-v2`, run:
 ```bash
 python -m rlrd run rlrd:DcacTraining Env.id=HalfCheetah-v2
 ```
 
-To SAC agent on `Ant-v2` run:
+To train SAC on a 1-step delayed version of `Ant-v2` run:
 ```bash
 python -m rlrd run rlrd:DelayedSacTraining Env.id=Ant-v2
 ```
 
+### Weights and Biases API
+Your curves can be exported directly to the Weights and Biases (wandb) website by using `run-wandb`.
+For example, to run DC/AC on Pendulum with a 1-step delay and export the curves to your wanb project:
+
+```terminal
+python -m rlrd run-wandb \
+yourWandbID \
+yourWandbProjectName \
+aNameForTheWandbRun \
+aFileNameForLocalCheckpoints \
+rlrd:DcacTraining Env.id=Pendulum-v0
+```
+
+Use the optional hyperparameters descibed before to play with more meaningful delays.
+
+### Contribute / known issues
+Contributions are welcome.
+Please submit a PR with your name in the contributors list.
+
+We did not yet optimize our python implementation of DC/AC, this is the most important thing to do right now as it is quite slow.
+
+In particular, a lot of time is wasted when artificially re-creating a batched tensor for computing the value estimates in one forward pass, and the replay buffer is inefficient.
+See the `#FIXME` in [dcac.py](https://github.com/rmst/rlrd/blob/master/rlrd/dcac.py)
+
 ### Authors
+
+#### Maintainers
+
 - Yann Bouteiller
 - Simon Ramstedt
+
+#### Contributors
