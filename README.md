@@ -59,7 +59,7 @@ python -m rlrd run rlrd:DcacTraining Env.id=HalfCheetah-v2
 
 To SAC agent on `Ant-v2` run:
 ```bash
-python -m rlrd run rlrd:DelayedSacTraining Env.id=HalfCheetah-v2
+python -m rlrd run rlrd:DelayedSacTraining Env.id=Ant-v2
 ```
 
 ### Authors

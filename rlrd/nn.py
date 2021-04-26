@@ -106,7 +106,7 @@ class TanhNormal(Distribution):
         self.normal_std = normal_std
         self.normal = Normal(normal_mean, normal_std)
         self.epsilon = epsilon
-        super().__init__(self.normal.batch_shape, self.normal.event_shape)
+        super().__init__(self.normal.batch_shape, self.normal.event_shape, validate_args=False)
 
     def log_prob(self, x):
         if hasattr(x, "pre_tanh_value"):
