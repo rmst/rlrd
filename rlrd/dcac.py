@@ -110,7 +110,7 @@ class Agent(rlrd.sac.Agent):
         # We expect each augmented state to be of shape (obs:tensor, act_buf:(tensor, ..., tensor), obs_del:tensor, act_del:tensor). Each tensor is batched.
         # To execute only 1 forward pass in the state-value estimator we recreate an artificially batched augmented state for this specific purpose.
 
-        # TODO: the profiler indicates that the following 5 lines are very inefficient, optimize
+        # FIXME: the profiler indicates that the following 5 lines are very inefficient, optimize
 
         obs_s = torch.stack([self.traj_new_augm_obs[i + 1][0][ibatch] for ibatch, i in enumerate(nstep_len)])
         act_s = tuple(torch.stack([self.traj_new_augm_obs[i + 1][1][iact][ibatch] for ibatch, i in enumerate(nstep_len)]) for iact in range(self.old_act_buf_size))
