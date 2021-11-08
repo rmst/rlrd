@@ -1,4 +1,4 @@
-# Reinforcement Learning with Random Delays – Pytorch
+# Reinforcement Learning with Random Delays
 
 PyTorch implementation of our paper [Reinforcement Learning with Random Delays (ICLR 2020)](https://openreview.net/forum?id=QFYnKlBJYR) – [[Arxiv]](https://arxiv.org/abs/2010.02966)
 
