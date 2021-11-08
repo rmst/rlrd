@@ -1,6 +1,6 @@
-# RLRD
+# Reinforcement Learning with Random Delays – Pytorch
 
-[Reinforcement Learning with Random Delays](https://arxiv.org/abs/2010.02966) in Pytorch
+PyTorch implementation of our paper [Reinforcement Learning with Random Delays (ICLR 2020)](https://openreview.net/forum?id=QFYnKlBJYR) – [[Arxiv]](https://arxiv.org/abs/2010.02966)
 
 ### Getting Started
 This repository can be pip-installed via:
@@ -13,7 +13,7 @@ DC/AC can be run on a simple 1-step delayed `Pendulum-v0` task via:
 python -m rlrd run rlrd:DcacTraining Env.id=Pendulum-v0
 ```
 
-Many optional hyperparameters can be set via command line. For instance:
+Hyperparameters can be set via command line. E.g.:
 ```bash
 python -m rlrd run rlrd:DcacTraining \
 Env.id=Pendulum-v0 \
@@ -85,12 +85,3 @@ We did not yet optimize our python implementation of DC/AC, this is the most imp
 
 In particular, a lot of time is wasted when artificially re-creating a batched tensor for computing the value estimates in one forward pass, and the replay buffer is inefficient.
 See the `#FIXME` in [dcac.py](https://github.com/rmst/rlrd/blob/master/rlrd/dcac.py)
-
-### Authors
-
-#### Maintainers
-
-- Yann Bouteiller
-- Simon Ramstedt
-
-#### Contributors
