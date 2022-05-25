@@ -20,7 +20,7 @@ setup(
         'imageio',
         'imageio-ffmpeg',
         'pandas',
-        'gym',
+        'gym==0.19.0',
         'pyyaml',
         'wandb'
     ],
